@@ -1,22 +1,220 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String        @id @default(cuid())
-  email         String        @unique
-  username      String        @unique
-  name          String?
-  passwordHash  String
-  createdAt      DateTime      @default(now())
+  id                 Int                 @id @default(autoincrement())
+  email              String              @unique
+  username           String              @unique
+  name               String?
+  passwordHash       String
+  sessionToken       String?             @unique
+  createdAt          DateTime            @default(now())
+  inboundAddresses   InboundAddress[]
+  rules              Rule[]
+  mailFlowEvents     MailFlowEvent[]
+  transferShortcuts  TransferShortcut[]
+}
+
+/// Raccourci de transfert (boite de reception) : une ou plusieurs adresses destinataires.
+model TransferShortcut {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  /// Adresses normalisees (minuscules), sans doublon dans le tableau.
+  emails    String[]
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Journal partage entre la passerelle SMTP (Python) et Next pour le suivi de bout en bout.
+model MailFlowEvent {
+  id              Int      @id @default(autoincrement())
+  createdAt       DateTime @default(now())
+  correlationId   String
+  userId          Int?
+  actor           String
+  step            String
+  direction       String
+  summary         String
+  detail          Json?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([correlationId])
+  @@index([createdAt])
+}
+
+/// Adresse de reception rattachee a un utilisateur (RCPT SMTP cible).
+model InboundAddress {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  localPart  String
+  domain     String
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   InboundMessage[]
+  rules      Rule[]
+
+  @@unique([localPart, domain])
+  @@index([userId])
+}
+
+/// Message recu et persiste (MIME brut + extrait texte/HTML + en-tetes). Alimente la boite de reception.
+model InboundMessage {
+  id                Int                @id @default(autoincrement())
+  inboundAddressId  Int
+  /// Identifiant de trace partage avec MailFlowEvent (meme valeur que le flux passerelle → API).
+  correlationId     String?
+  messageIdHeader   String?
+  mailFrom          String
+  rcptTo            Json
+  subject           String?
+  rawMime           String
+  textBody          String?
+  htmlBody          String?
+  headers           Json
+  receivedAt        DateTime           @default(now())
+  /// Null = non lu dans l UI boite (a utiliser quand tu brancheras l action « marquer lu »).
+  readAt            DateTime?
+  /// Message deplace dans l onglet Archive (hors boite de reception).
+  archived          Boolean            @default(false)
+  inboundAddress    InboundAddress     @relation(fields: [inboundAddressId], references: [id], onDelete: Cascade)
+  attachments       InboundAttachment[]
+  actionLogs        MessageActionLog[]
+
+  @@index([inboundAddressId, receivedAt])
+  @@index([inboundAddressId, archived, receivedAt])
+  @@index([messageIdHeader])
+  @@index([correlationId])
+}
+
+/// Metadonnees des pieces jointes (contenu reste dans rawMime ; evite de reparser a chaque liste).
+model InboundAttachment {
+  id               Int            @id @default(autoincrement())
+  inboundMessageId Int
+  filename         String?
+  contentType      String?
+  sizeBytes        Int
+  contentId        String?
+  disposition      String?
+  inboundMessage   InboundMessage @relation(fields: [inboundMessageId], references: [id], onDelete: Cascade)
+
+  @@index([inboundMessageId])
+}
+
+model Rule {
+  id               Int              @id @default(autoincrement())
+  userId           Int
+  inboundAddressId Int?
+  name             String
+  enabled          Boolean          @default(true)
+  priority         Int              @default(100)
+  stopProcessing   Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inboundAddress   InboundAddress?  @relation(fields: [inboundAddressId], references: [id], onDelete: Cascade)
+  conditions       RuleCondition[]
+  actions          RuleAction[]
+  actionLogs       MessageActionLog[]
+
+  @@index([userId, enabled, priority])
+  @@index([inboundAddressId])
+}
+
+model RuleCondition {
+  id            Int               @id @default(autoincrement())
+  ruleId        Int
+  field         RuleField
+  /// Si field = HEADER : nom de l en-tete (ex. X-Custom-Id). Sinon null.
+  headerName    String?
+  operator      RuleOperator
+  value         String
+  caseSensitive Boolean           @default(false)
+  createdAt     DateTime          @default(now())
+  rule          Rule              @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+}
+
+model RuleAction {
+  id         Int              @id @default(autoincrement())
+  ruleId     Int
+  type       RuleActionType
+  config     Json
+  order      Int              @default(1)
+  createdAt  DateTime         @default(now())
+  rule       Rule             @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  actionLogs MessageActionLog[]
+
+  @@index([ruleId, order])
+}
+
+model MessageActionLog {
+  id               Int             @id @default(autoincrement())
+  inboundMessageId Int
+  ruleId           Int?
+  actionId         Int?
+  status           ActionLogStatus
+  detail           Json?
+  createdAt        DateTime        @default(now())
+  inboundMessage   InboundMessage  @relation(fields: [inboundMessageId], references: [id], onDelete: Cascade)
+  rule             Rule?           @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  action           RuleAction?     @relation(fields: [actionId], references: [id], onDelete: SetNull)
+
+  @@index([inboundMessageId, createdAt])
+  @@index([ruleId])
+  @@index([actionId])
+}
+
+enum RuleField {
+  FROM
+  SUBJECT
+  BODY
+  HEADER
+}
+
+enum RuleOperator {
+  CONTAINS
+  EQUALS
+  STARTS_WITH
+  REGEX
+}
+
+enum RuleActionType {
+  FORWARD
+  REWRITE_SUBJECT
+  PREPEND_TEXT
+  DROP
+}
+
+enum ActionLogStatus {
+  MATCHED
+  SKIPPED
+  SENT
+  FAILED
+}
+
+/// Configuration SMTP sortante (singleton id = 1). Prioritaire sur les variables d'environnement si host non vide.
+model SmtpOutboundSettings {
+  id           Int      @id @default(1)
+  host         String   @default("")
+  port         Int      @default(587)
+  secure       Boolean  @default(false)
+  authUser     String?
+  authPassword String?
+  fromAddress  String   @default("")
+  updatedAt    DateTime @updatedAt
 }

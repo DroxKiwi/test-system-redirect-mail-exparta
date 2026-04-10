@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+Dockerfile*
+docker-compose*.yml
+coverage
+.vscode
+.idea
+*.log
+smtp-gateway/__pycache__
+**/__pycache__

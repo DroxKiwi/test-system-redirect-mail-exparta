@@ -1,0 +1,88 @@
+# Stack : Postgres + images GHCR (workflow .github/workflows/docker-publish.yml, tag latest sur main).
+# Chemins d’images = même couple owner/repo que GitHub, en minuscules (ex. DroxKiwi/... → ghcr.io/droxkiwi/...).
+#
+# Fork : remplace droxkiwi dans les deux `image:` ci-dessous par ton compte ou organisation GitHub.
+#
+# Démarrage : docker compose pull && docker compose up -d
+# (secrets applicatifs : INBOUND_SECRET, FIRST_SETUP_TOKEN, SMTP_*, etc. — voir .env)
+#
+# URLs :
+#   - Application     : http://localhost:3000
+#   - SMTP gateway    : localhost:2525
+#   - Postgres (hôte) : localhost:5788 → 5432 dans le réseau compose
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mail-exparta-db
+    restart: unless-stopped
+    ports:
+      - "5788:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test-system-redirect-mail-exparta
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d test-system-redirect-mail-exparta",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: ghcr.io/droxkiwi/test-system-redirect-mail-exparta:latest
+    container_name: mail-exparta-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/test-system-redirect-mail-exparta
+      INBOUND_SECRET: ${INBOUND_SECRET:-change-me-inbound}
+      FIRST_SETUP_TOKEN: ${FIRST_SETUP_TOKEN:-change-me-setup}
+      NODE_ENV: production
+      SMTP_OUTBOUND_HOST: ${SMTP_OUTBOUND_HOST:-}
+      SMTP_OUTBOUND_PORT: ${SMTP_OUTBOUND_PORT:-587}
+      SMTP_OUTBOUND_SECURE: ${SMTP_OUTBOUND_SECURE:-false}
+      SMTP_OUTBOUND_USER: ${SMTP_OUTBOUND_USER:-}
+      SMTP_OUTBOUND_PASS: ${SMTP_OUTBOUND_PASS:-}
+      SMTP_OUTBOUND_FROM: ${SMTP_OUTBOUND_FROM:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok||r.status===307?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
+
+  smtp-gateway:
+    image: ghcr.io/droxkiwi/test-system-redirect-mail-exparta-smtp-gateway:latest
+    container_name: mail-exparta-smtp
+    restart: unless-stopped
+    ports:
+      - "2525:2525"
+    environment:
+      SMTP_HOST: 0.0.0.0
+      SMTP_PORT: 2525
+      INBOUND_URL: http://web:3000/api/inbound/mail
+      INBOUND_SECRET: ${INBOUND_SECRET:-change-me-inbound}
+      REQUEST_TIMEOUT_SEC: "30"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/test-system-redirect-mail-exparta
+    depends_on:
+      postgres:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
