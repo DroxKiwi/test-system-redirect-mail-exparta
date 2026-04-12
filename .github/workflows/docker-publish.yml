@@ -1,4 +1,4 @@
-# Image publiée sur ghcr.io : <owner>/<repo> → application Next.js (Dockerfile racine).
+# Images ghcr.io : <owner>/<repo> (Next.js) et <owner>/<repo>-worker (robot Python linker/).
 #
 # Déclencheurs : push sur main, tags v* (ex. v1.0.0), déclenchement manuel.
 # Prérequis : packages GitHub activés ; migrations Prisma au démarrage du conteneur web (docker-entrypoint.sh).
@@ -66,3 +66,26 @@ jobs:
           labels: ${{ steps.meta_web.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+      # --- Robot worker (linker/robot.py) — déploiement sans clone du dépôt ---
+      - name: Métadonnées image worker
+        id: meta_worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-worker
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build et push image worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.worker
+          push: true
+          tags: ${{ steps.meta_worker.outputs.tags }}
+          labels: ${{ steps.meta_worker.outputs.labels }}
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker

@@ -1,4 +1,5 @@
-# Stack : Postgres + image web GHCR (workflow .github/workflows/docker-publish.yml, tag latest sur main).
+# Stack : Postgres + images GHCR web + worker (workflow .github/workflows/docker-publish.yml, latest sur main).
+# En prod : copiez seulement ce fichier + un .env ; `docker compose pull && docker compose up -d` (pas besoin du repo).
 # Chemin d’image = même couple owner/repo que GitHub, en minuscules (ex. DroxKiwi/... → ghcr.io/droxkiwi/...).
 #
 # Fork : remplace droxkiwi dans `image:` ci-dessous par ton compte ou organisation GitHub.
@@ -62,13 +63,9 @@ services:
       start_period: 90s
 
   worker:
-    image: python:3.12-alpine
+    image: ghcr.io/droxkiwi/test-system-redirect-mail-exparta-worker:latest
     container_name: mail-exparta-worker
     restart: unless-stopped
-    working_dir: /opt/linker
-    volumes:
-      - ./linker:/opt/linker:ro
-    command: ["python3", "-u", "robot.py"]
     environment:
       WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:-change-me-worker-trigger}
       NEXT_APP_BASE_URL: http://web:3000
