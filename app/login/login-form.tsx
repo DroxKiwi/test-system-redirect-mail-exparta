@@ -42,7 +42,7 @@ export function LoginForm() {
         return;
       }
 
-      router.push("/");
+      router.push("/boite");
       router.refresh();
     } catch {
       setError("Erreur réseau. Vérifiez votre connexion.");

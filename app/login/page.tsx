@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/auth-user";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -6,6 +8,10 @@ export const metadata: Metadata = {
   description: "Connectez-vous à votre compte",
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getSessionUser();
+  if (user) {
+    redirect("/boite");
+  }
   return <LoginForm />;
 }

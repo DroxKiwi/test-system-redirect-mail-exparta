@@ -64,6 +64,8 @@ services:
       retries: 18
       start_period: 90s
 
+  # Image GHCR : robot.py est déjà dedans. Ne montez PAS ./linker ici — un volume vide
+  # écrase /opt/linker et provoque « can't open file ... robot.py ».
   worker:
     image: ghcr.io/droxkiwi/test-system-redirect-mail-exparta-worker:latest
     container_name: mail-exparta-worker
