@@ -3,6 +3,7 @@ FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm ci
 
 # --- Build ---
@@ -23,13 +24,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+# Requis avant `npm ci` : le postinstall lance `prisma generate` (besoin du schéma).
+COPY --from=builder /app/prisma ./prisma
 RUN npm ci && npm cache clean --force
 
-COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-
-RUN npx prisma generate
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
