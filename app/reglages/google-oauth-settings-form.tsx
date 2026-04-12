@@ -51,6 +51,8 @@ export function GoogleOAuthSettingsForm() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Origine publique (BASE_URL / proxy / window) pour les exemples d’URI OAuth. */
+  const [publicOrigin, setPublicOrigin] = useState("http://localhost:3000");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,6 +84,28 @@ export function GoogleOAuthSettingsForm() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings/app-origin");
+        const data = (await res.json()) as { origin?: string };
+        if (!cancelled && data.origin) {
+          setPublicOrigin(data.origin);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      if (!cancelled && typeof window !== "undefined") {
+        setPublicOrigin(window.location.origin);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const gmail = searchParams.get("gmail_connected");
@@ -191,6 +215,8 @@ export function GoogleOAuthSettingsForm() {
   const canConnect =
     clientId.trim() && redirectUri.trim() && (hasClientSecret || clientSecret.trim());
 
+  const gmailRedirectExample = `${publicOrigin}/api/gmail/oauth/callback`;
+
   return (
     <Card>
       <CardHeader>
@@ -206,9 +232,7 @@ export function GoogleOAuthSettingsForm() {
             console Google Cloud
           </a>
           . L&apos;URI de redirection doit etre identique ici et dans la console (ex.{" "}
-          <span className="font-mono text-xs">
-            http://localhost:3000/api/gmail/oauth/callback
-          </span>
+          <span className="font-mono text-xs break-all">{gmailRedirectExample}</span>
           ). Une fois Gmail connecte, les transferts (raccourcis et regles FORWARD) sont envoyes
           depuis cette boite ; sinon l&apos;envoi utilise le SMTP sortant des Reglages.
         </CardDescription>
@@ -270,7 +294,7 @@ export function GoogleOAuthSettingsForm() {
                   id="g-redirect"
                   value={redirectUri}
                   onChange={(e) => setRedirectUri(e.target.value)}
-                  placeholder="http://localhost:3000/api/gmail/oauth/callback"
+                  placeholder={gmailRedirectExample}
                   autoComplete="off"
                 />
               </div>

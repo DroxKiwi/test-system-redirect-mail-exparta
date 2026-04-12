@@ -53,6 +53,7 @@ export function OutlookOAuthSettingsForm() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [publicOrigin, setPublicOrigin] = useState("http://localhost:3000");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +86,28 @@ export function OutlookOAuthSettingsForm() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings/app-origin");
+        const data = (await res.json()) as { origin?: string };
+        if (!cancelled && data.origin) {
+          setPublicOrigin(data.origin);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      if (!cancelled && typeof window !== "undefined") {
+        setPublicOrigin(window.location.origin);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const ok = searchParams.get("outlook_connected");
@@ -195,6 +218,8 @@ export function OutlookOAuthSettingsForm() {
   const canConnect =
     clientId.trim() && redirectUri.trim() && (hasClientSecret || clientSecret.trim());
 
+  const outlookRedirectExample = `${publicOrigin}/api/outlook/oauth/callback`;
+
   return (
     <Card>
       <CardHeader>
@@ -211,9 +236,7 @@ export function OutlookOAuthSettingsForm() {
           </a>
           . Type de compte : comptes dans un annuaire organisationnel et comptes Microsoft personnels.
           URI de redirection identique ici et dans Azure (ex.{" "}
-          <span className="font-mono text-xs">
-            http://localhost:3000/api/outlook/oauth/callback
-          </span>
+          <span className="font-mono text-xs break-all">{outlookRedirectExample}</span>
           ). Une fois Outlook connecte, les transferts partent depuis cette boite ; sinon SMTP sortant.
         </CardDescription>
       </CardHeader>
@@ -290,7 +313,7 @@ export function OutlookOAuthSettingsForm() {
                   id="o-redirect"
                   value={redirectUri}
                   onChange={(e) => setRedirectUri(e.target.value)}
-                  placeholder="http://localhost:3000/api/outlook/oauth/callback"
+                  placeholder={outlookRedirectExample}
                   autoComplete="off"
                 />
               </div>

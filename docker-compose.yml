@@ -44,6 +44,8 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/test-system-redirect-mail-exparta
+      # URL publique https://… (OAuth / exemples). Optionnel si le proxy envoie Host / X-Forwarded-*.
+      BASE_URL: ${BASE_URL:-}
       INBOUND_SECRET: ${INBOUND_SECRET:-change-me-inbound}
       FIRST_SETUP_TOKEN: ${FIRST_SETUP_TOKEN:-change-me-setup}
       WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:-change-me-worker-trigger}
