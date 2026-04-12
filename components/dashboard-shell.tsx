@@ -6,15 +6,18 @@ import { LogoutButton } from "@/components/logout-button";
 type DashboardTab =
   | "archive"
   | "boite"
-  | "flux"
   | "historique"
   | "reglages"
-  | "transfere";
+  | "transfere"
+  | "utilisateurs";
 
 type DashboardShellProps = {
-  currentTab: DashboardTab;
+  /** Onglet latéral actif ; omis sur l’accueil pour n’en surligner aucun. */
+  currentTab?: DashboardTab;
   title: string;
   userEmail: string;
+  /** Affiche l’onglet de gestion des comptes (réservé aux administrateurs). */
+  isAdmin?: boolean;
   /** Si false, le contenu n’est pas enveloppé dans la carte (ex. lecteur message). */
   contentFrame?: boolean;
   /** Actions à droite du titre (ex. bouton secondaire). */
@@ -34,6 +37,7 @@ export function DashboardShell({
   currentTab,
   title,
   userEmail,
+  isAdmin = false,
   contentFrame = true,
   titleActions,
   children,
@@ -59,14 +63,6 @@ export function DashboardShell({
         </div>
 
         <nav className="flex flex-col gap-2">
-          <Link
-            href="/flux"
-            className={`rounded-md px-3 py-2 text-sm font-medium transition ${tabClass(
-              currentTab === "flux"
-            )}`}
-          >
-            Flux
-          </Link>
           <Link
             href="/boite"
             className={`rounded-md px-3 py-2 text-sm font-medium transition ${tabClass(
@@ -109,6 +105,17 @@ export function DashboardShell({
           >
             Reglages
           </Link>
+          {isAdmin ? (
+            <Link
+              href="/utilisateurs"
+              className={`rounded-md px-3 py-2 text-sm font-medium transition ${tabClass(
+                currentTab === "utilisateurs"
+              )}`}
+            >
+              <span className="md:hidden">Util.</span>
+              <span className="hidden md:inline">Utilisateurs</span>
+            </Link>
+          ) : null}
         </nav>
 
         <div className="mt-auto rounded-lg border border-sidebar-border bg-card p-3">

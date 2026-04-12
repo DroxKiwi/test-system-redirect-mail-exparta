@@ -44,7 +44,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const existing = await prisma.transferShortcut.findFirst({
-    where: { id, userId: user.id },
+    where: { id },
     select: { id: true },
   });
   if (!existing) {
@@ -72,7 +72,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   const result = await prisma.transferShortcut.deleteMany({
-    where: { id, userId: user.id },
+    where: { id },
   });
 
   if (result.count === 0) {

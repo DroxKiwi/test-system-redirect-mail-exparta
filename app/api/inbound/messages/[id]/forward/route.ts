@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { ActionLogStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-user";
@@ -43,7 +44,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const shortcut = await prisma.transferShortcut.findFirst({
-    where: { id: shortcutIdRaw, userId: user.id },
+    where: { id: shortcutIdRaw },
     select: { id: true, emails: true },
   });
 
@@ -54,7 +55,7 @@ export async function POST(request: Request, context: RouteContext) {
   const message = await prisma.inboundMessage.findFirst({
     where: {
       id: messageId,
-      inboundAddress: { userId: user.id },
+      inboundAddress: { isActive: true },
     },
     select: {
       id: true,
@@ -72,15 +73,37 @@ export async function POST(request: Request, context: RouteContext) {
   const toList = shortcut.emails;
 
   try {
-    await sendForwardMail({
+    const sendResult = await sendForwardMail({
       to: toList,
       subject: message.subject?.trim() || "(sans sujet)",
       text: message.textBody ?? undefined,
       html: message.htmlBody ?? undefined,
       replyTo: message.mailFrom,
     });
+    const detail: Record<string, unknown> = {
+      type: "FORWARD",
+      to: toList,
+      shortcutId: shortcut.id,
+      source: "shortcut",
+    };
+    if (sendResult.channel === "gmail") {
+      detail.outboundRfcMessageId = sendResult.outboundRfcMessageId;
+      detail.gmailSentMessageId = sendResult.gmailSentMessageId;
+    }
+
+    await prisma.messageActionLog.create({
+      data: {
+        inboundMessageId: message.id,
+        ruleId: null,
+        actionId: null,
+        status: ActionLogStatus.SENT,
+        detail: detail as Prisma.InputJsonValue,
+      },
+    });
+
+    return NextResponse.json({ ok: true, to: toList, shortcutId: shortcut.id });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erreur SMTP";
+    const msg = e instanceof Error ? e.message : "Erreur envoi";
     await prisma.messageActionLog.create({
       data: {
         inboundMessageId: message.id,
@@ -98,21 +121,4 @@ export async function POST(request: Request, context: RouteContext) {
     });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
-
-  await prisma.messageActionLog.create({
-    data: {
-      inboundMessageId: message.id,
-      ruleId: null,
-      actionId: null,
-      status: ActionLogStatus.SENT,
-      detail: {
-        type: "FORWARD",
-        to: toList,
-        shortcutId: shortcut.id,
-        source: "shortcut",
-      },
-    },
-  });
-
-  return NextResponse.json({ ok: true, to: toList, shortcutId: shortcut.id });
 }

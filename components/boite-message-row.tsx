@@ -3,6 +3,7 @@
 import { Paperclip } from "lucide-react";
 import Link from "next/link";
 import { BoiteRowArchiveButton } from "@/components/boite-row-archive-button";
+import { BoiteRowHideFromTransferButton } from "@/components/boite-row-hide-from-transfer-button";
 import { BoiteRowTransferMenu } from "@/components/boite-row-transfer-menu";
 import { BoiteRowUnarchiveButton } from "@/components/boite-row-unarchive-button";
 import type { TransferShortcutItem } from "@/components/transfer-shortcuts-dialog";
@@ -13,6 +14,7 @@ import {
   senderLabel,
 } from "@/lib/mail-display";
 import type { BoiteListMessage } from "@/lib/boite-messages";
+import { cn } from "@/lib/utils";
 
 type BoiteMessageRowProps = {
   m: BoiteListMessage;
@@ -21,6 +23,8 @@ type BoiteMessageRowProps = {
   /** Bouton désarchiver (onglet Archive). */
   showUnarchiveAction?: boolean;
   showTransferAction?: boolean;
+  /** Retirer de la liste Transféré (colonne de droite). */
+  showHideFromTransferListAction?: boolean;
   transferShortcuts?: TransferShortcutItem[];
 };
 
@@ -29,6 +33,7 @@ export function BoiteMessageRow({
   showArchiveAction = false,
   showUnarchiveAction = false,
   showTransferAction = false,
+  showHideFromTransferListAction = false,
   transferShortcuts = [],
 }: BoiteMessageRowProps) {
   const addr = `${m.inboundAddress.localPart}@${m.inboundAddress.domain}`;
@@ -37,8 +42,10 @@ export function BoiteMessageRow({
   const preview = previewText(m.textBody);
   const subject = m.subject?.trim();
   const hasAttachments = m.attachments.length > 0;
+  const isRead = m.readAt != null;
 
   const a11yLabel = [
+    isRead ? "Lu." : "Non lu.",
     `Reçu ${m.receivedAt.toLocaleString("fr-FR")}`,
     `expéditeur ${m.mailFrom}`,
     `destinataire ${destinataire}`,
@@ -50,11 +57,23 @@ export function BoiteMessageRow({
     .join(". ");
 
   return (
-    <li className="flex min-h-[2.75rem] items-stretch border-b border-border/50 last:border-b-0">
+    <li
+      className={cn(
+        "flex min-h-[2.75rem] items-stretch border-b border-border/50 last:border-b-0",
+        isRead
+          ? "bg-muted/85 dark:bg-muted/70"
+          : "bg-sky-50 dark:bg-sky-950/30"
+      )}
+    >
       <Link
         href={`/boite/${m.id}`}
         aria-label={a11yLabel}
-        className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 pr-2 transition-colors hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:gap-3"
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 pr-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:gap-3",
+          isRead
+            ? "hover:bg-muted focus-visible:bg-muted dark:hover:bg-muted/90 dark:focus-visible:bg-muted/90"
+            : "hover:bg-sky-100/90 focus-visible:bg-sky-100/90 dark:hover:bg-sky-950/45 dark:focus-visible:bg-sky-950/45"
+        )}
       >
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-baseline sm:gap-4">
           <div className="w-[min(42%,11rem)] shrink-0 sm:w-44 md:w-52">
@@ -84,7 +103,14 @@ export function BoiteMessageRow({
         </div>
       </Link>
 
-      <div className="flex shrink-0 items-center gap-0.5 border-l border-border/60 bg-muted/20 py-1 pr-2 pl-1 sm:gap-1 sm:pr-3">
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-0.5 border-l border-border/60 py-1 pr-2 pl-1 sm:gap-1 sm:pr-3",
+          isRead
+            ? "bg-muted/80 dark:bg-muted/65"
+            : "bg-sky-50/95 dark:bg-sky-950/35"
+        )}
+      >
         {hasAttachments ? (
           <span
             className="flex size-8 items-center justify-center text-muted-foreground"
@@ -99,15 +125,25 @@ export function BoiteMessageRow({
         <time
           dateTime={m.receivedAt.toISOString()}
           className="flex w-[3.25rem] shrink-0 items-center justify-end text-right text-xs font-semibold tabular-nums text-foreground sm:w-14"
-          title={m.receivedAt.toLocaleString("fr-FR", {
-            dateStyle: "full",
-            timeStyle: "short",
-          })}
+          title={[
+            m.receivedAt.toLocaleString("fr-FR", {
+              dateStyle: "full",
+              timeStyle: "short",
+            }),
+            m.gmailMessageId
+              ? `Import Gmail · id message ${m.gmailMessageId}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         >
           {formatReceivedShort(m.receivedAt)}
         </time>
         {showTransferAction ? (
           <BoiteRowTransferMenu messageId={m.id} shortcuts={transferShortcuts} />
+        ) : null}
+        {showHideFromTransferListAction ? (
+          <BoiteRowHideFromTransferButton messageId={m.id} />
         ) : null}
         {showArchiveAction ? <BoiteRowArchiveButton messageId={m.id} /> : null}
         {showUnarchiveAction ? <BoiteRowUnarchiveButton messageId={m.id} /> : null}

@@ -146,3 +146,31 @@
     @apply rounded-sm bg-primary/15 px-1 py-0.5 font-medium text-primary;
   }
 }
+
+/* Éditeur TipTap (nouveau message) */
+.mail-compose-tiptap ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.mail-compose-tiptap ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.mail-compose-tiptap a {
+  @apply text-primary underline underline-offset-2;
+}
+
+@keyframes compose-mail-sheet-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0.96;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.compose-mail-sheet {
+  animation: compose-mail-sheet-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}

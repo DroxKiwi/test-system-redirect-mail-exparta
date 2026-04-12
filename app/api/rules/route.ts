@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     }
     inboundAddressId = id;
     const addr = await prisma.inboundAddress.findFirst({
-      where: { id, userId: user.id, isActive: true },
+      where: { id, isActive: true },
       select: { id: true },
     });
     if (!addr) {
@@ -182,7 +182,6 @@ export async function POST(request: Request) {
 
   const rule = await prisma.rule.create({
     data: {
-      userId: user.id,
       inboundAddressId,
       name,
       enabled,

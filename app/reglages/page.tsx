@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import {
   Card,
@@ -9,8 +10,8 @@ import {
 import { DashboardShell } from "@/components/dashboard-shell";
 import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
+import { GoogleOAuthSettingsForm } from "./google-oauth-settings-form";
 import { RuleForm } from "./rule-form";
-import { SmtpSettingsForm } from "./smtp-settings-form";
 
 export default async function ReglagesPage() {
   const user = await getSessionUser();
@@ -20,12 +21,11 @@ export default async function ReglagesPage() {
 
   const [addresses, rules] = await Promise.all([
     prisma.inboundAddress.findMany({
-      where: { userId: user.id, isActive: true },
+      where: { isActive: true },
       orderBy: { createdAt: "asc" },
       select: { id: true, localPart: true, domain: true },
     }),
     prisma.rule.findMany({
-      where: { userId: user.id },
       orderBy: [{ priority: "asc" }, { id: "asc" }],
       select: {
         id: true,
@@ -42,28 +42,31 @@ export default async function ReglagesPage() {
   ]);
 
   return (
-    <DashboardShell currentTab="reglages" title="Reglages" userEmail={user.email}>
+    <DashboardShell
+      currentTab="reglages"
+      title="Reglages"
+      userEmail={user.email}
+      isAdmin={user.isAdmin}
+    >
       <div className="flex flex-col gap-8">
-        <SmtpSettingsForm />
-
-        {addresses.length === 0 ? (
-          <Card className="border-amber-500/40 bg-amber-500/5">
-            <CardHeader>
-              <CardTitle className="text-base">Aucune adresse d&apos;entree</CardTitle>
-              <CardDescription>
-                Cree au moins une ligne dans <code className="rounded bg-muted px-1">InboundAddress</code>{" "}
-                (Prisma Studio ou seed) pour lier des mails entrants a ton compte. Tu pourras alors restreindre
-                une regle a une adresse precise.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        ) : null}
+        <Suspense
+          fallback={
+            <Card>
+              <CardHeader>
+                <CardTitle>Gmail (API Google)</CardTitle>
+                <CardDescription>Chargement…</CardDescription>
+              </CardHeader>
+            </Card>
+          }
+        >
+          <GoogleOAuthSettingsForm />
+        </Suspense>
 
         <RuleForm addresses={addresses} />
 
         <Card>
           <CardHeader>
-            <CardTitle>Tes regles enregistrees</CardTitle>
+            <CardTitle>Regles enregistrees</CardTitle>
             <CardDescription>
               Rappel : priorite <strong>plus petite</strong> = evaluee <strong>avant</strong>. Le moteur
               d&apos;execution sur les mails entrants sera branche ensuite.

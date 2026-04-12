@@ -1,24 +1,7 @@
-services:
-  smtp-gateway:
-    build:
-      context: ./smtp-gateway
-    container_name: test-system-redirect-mail-exparta-smtp
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "2525:2525"
-    environment:
-      SMTP_HOST: 0.0.0.0
-      SMTP_PORT: 2525
-      INBOUND_URL: http://host.docker.internal:3000/api/inbound/mail
-      INBOUND_SECRET: change-me
-      REQUEST_TIMEOUT_SEC: 10
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/test-system-redirect-mail-exparta
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+# Fichier d’override local (ex. `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`).
+# Postgres en build local / ports exposés — à adapter selon ton flux.
 
+services:
   postgres:
     image: postgres:16
     container_name: test-system-redirect-mail-exparta-db

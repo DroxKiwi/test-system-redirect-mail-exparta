@@ -14,7 +14,7 @@ export async function POST() {
     return NextResponse.json(
       {
         error:
-          "SMTP sortant non configure (remplis le formulaire ou les variables d'environnement).",
+          "SMTP sortant non configure : renseigne l'hote, le port et l'expediteur dans Reglages.",
       },
       { status: 400 }
     );
@@ -32,7 +32,7 @@ export async function POST() {
       from: cfg.from,
       to: user.email,
       subject: "[Mail Proxy] Test d'envoi SMTP",
-      text: `Ceci est un message de test envoye depuis les reglages (${cfg.source}).`,
+      text: `Ceci est un message de test envoye depuis les reglages (configuration SMTP en base).`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

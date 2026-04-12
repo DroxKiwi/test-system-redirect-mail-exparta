@@ -42,36 +42,29 @@ export default async function HistoriquePage() {
     redirect("/login");
   }
 
-  const mine = await prisma.mailFlowEvent.findMany({
-    where: { userId: user.id },
-    select: { correlationId: true },
+  const events = await prisma.mailFlowEvent.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 500,
   });
-  const correlationSet = new Set(mine.map((m) => m.correlationId));
-  const correlations = Array.from(correlationSet);
-
-  const events =
-    correlations.length === 0
-      ? []
-      : await prisma.mailFlowEvent.findMany({
-          where: { correlationId: { in: correlations } },
-          orderBy: { createdAt: "desc" },
-          take: 500,
-        });
 
   return (
-    <DashboardShell currentTab="historique" title="Historique" userEmail={user.email}>
+    <DashboardShell
+      currentTab="historique"
+      title="Historique"
+      userEmail={user.email}
+      isAdmin={user.isAdmin}
+    >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Fils d&apos;evenements partages entre la passerelle Python et Next (meme{" "}
-          <span className="font-mono text-xs">correlationId</span> / trace). Les lignes sans
-          compte rattache n&apos;apparaissent pas ici tant qu&apos;aucun evenement ne vous est
-          associe sur la meme trace.
+          Fils d&apos;evenements entre la reception SMTP et Next (meme{" "}
+          <span className="font-mono text-xs">correlationId</span> / trace). Journal partage pour
+          toute l&apos;instance (les 500 derniers evenements).
         </p>
 
         {events.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
             Aucun evenement pour le moment. Envoie un mail de test vers la passerelle une fois une
-            adresse d&apos;entree configuree pour ton compte.
+            adresse d&apos;entree configuree.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">

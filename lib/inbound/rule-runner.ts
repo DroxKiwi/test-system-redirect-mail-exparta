@@ -60,7 +60,6 @@ function applyRewriteSubject(
 
 export async function processInboundForAddress(input: {
   inboundAddressId: number;
-  userId: number;
   mailFrom: string;
   rcptTo: string[];
   rawMime: string;
@@ -69,7 +68,6 @@ export async function processInboundForAddress(input: {
 }): Promise<{ inboundMessageId: number }> {
   const {
     inboundAddressId,
-    userId,
     mailFrom,
     rcptTo,
     rawMime,
@@ -107,7 +105,6 @@ export async function processInboundForAddress(input: {
 
   await mailFlowLogSafe({
     correlationId,
-    userId,
     actor: "next",
     step: "inbound_message_stored",
     direction: "in",
@@ -121,7 +118,6 @@ export async function processInboundForAddress(input: {
 
   const rules = (await prisma.rule.findMany({
     where: {
-      userId,
       enabled: true,
       OR: [{ inboundAddressId: null }, { inboundAddressId }],
     },
@@ -220,11 +216,10 @@ export async function processInboundForAddress(input: {
             try {
               await mailFlowLogSafe({
                 correlationId,
-                userId,
                 actor: "next",
                 step: "smtp_outbound_attempt",
                 direction: "out",
-                summary: `Transfert SMTP vers ${to} (regle #${rule.id})`,
+                summary: `Transfert sortant vers ${to} (regle #${rule.id})`,
                 detail: {
                   to,
                   inboundMessageId: message.id,
@@ -232,27 +227,31 @@ export async function processInboundForAddress(input: {
                   actionId: action.id,
                 },
               });
-              await sendForwardMail({
+              const sendResult = await sendForwardMail({
                 to,
                 subject: workingSubject,
                 text: workingText || undefined,
                 html: workingHtml || undefined,
                 replyTo: mailFrom,
               });
+              const forwardDetail: Record<string, unknown> = { type: "FORWARD", to };
+              if (sendResult.channel === "gmail") {
+                forwardDetail.outboundRfcMessageId = sendResult.outboundRfcMessageId;
+                forwardDetail.gmailSentMessageId = sendResult.gmailSentMessageId;
+              }
               await logAction(
                 message.id,
                 rule.id,
                 action.id,
                 ActionLogStatus.SENT,
-                { type: "FORWARD", to }
+                forwardDetail as Prisma.InputJsonValue
               );
               await mailFlowLogSafe({
                 correlationId,
-                userId,
                 actor: "next",
                 step: "smtp_outbound_sent",
                 direction: "out",
-                summary: `Transfert SMTP reussi vers ${to}`,
+                summary: `Transfert sortant reussi vers ${to}`,
                 detail: {
                   to,
                   inboundMessageId: message.id,
@@ -261,7 +260,7 @@ export async function processInboundForAddress(input: {
               });
             } catch (err) {
               const msg =
-                err instanceof Error ? err.message : "Erreur envoi SMTP";
+                err instanceof Error ? err.message : "Erreur envoi sortant";
               await logAction(
                 message.id,
                 rule.id,
@@ -271,11 +270,10 @@ export async function processInboundForAddress(input: {
               );
               await mailFlowLogSafe({
                 correlationId,
-                userId,
                 actor: "next",
                 step: "smtp_outbound_failed",
                 direction: "out",
-                summary: `Echec transfert SMTP vers ${to}: ${msg.slice(0, 200)}`,
+                summary: `Echec transfert sortant vers ${to}: ${msg.slice(0, 200)}`,
                 detail: {
                   to,
                   inboundMessageId: message.id,

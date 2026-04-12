@@ -16,9 +16,17 @@
   },
   "dependencies": {
     "@prisma/client": "6.19.0",
+    "@tiptap/extension-color": "^3.22.3",
+    "@tiptap/extension-placeholder": "^3.22.3",
+    "@tiptap/extension-text-style": "^3.22.3",
+    "@tiptap/extension-underline": "^3.22.3",
+    "@tiptap/pm": "^3.22.3",
+    "@tiptap/react": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "googleapis": "^171.4.0",
     "lucide-react": "^1.8.0",
     "mailparser": "^3.9.8",
     "next": "16.2.3",
@@ -43,8 +51,8 @@
     "eslint-config-next": "16.2.3",
     "prisma": "6.19.0",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "tsx": "^4.19.4"
+    "tsx": "^4.19.4",
+    "typescript": "^5"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

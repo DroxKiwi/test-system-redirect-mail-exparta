@@ -14,6 +14,7 @@ export async function getSessionUser() {
       id: true,
       username: true,
       email: true,
+      isAdmin: true,
     },
   });
 }

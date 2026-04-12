@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const addr = await prisma.inboundAddress.findFirst({
-    where: { userId: user.id, isActive: true },
+    where: { isActive: true },
     orderBy: { id: "asc" },
   });
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Aucune adresse d'entree active. Cree une InboundAddress pour ton compte avant de tester la reception.",
+          "Aucune adresse d'entree active. Cree une InboundAddress avant de tester la reception.",
       },
       { status: 400 }
     );

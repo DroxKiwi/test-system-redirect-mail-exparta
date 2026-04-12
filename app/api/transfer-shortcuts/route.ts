@@ -14,7 +14,6 @@ export async function GET() {
   }
 
   const items = await prisma.transferShortcut.findMany({
-    where: { userId: user.id },
     orderBy: { createdAt: "asc" },
     select: { id: true, emails: true },
   });
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
 
   try {
     const row = await prisma.transferShortcut.create({
-      data: { userId: user.id, emails },
+      data: { emails },
       select: { id: true, emails: true },
     });
     return NextResponse.json({ shortcut: row });

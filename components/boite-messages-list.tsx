@@ -22,6 +22,8 @@ type BoiteMessagesListProps = {
   showUnarchiveAction?: boolean;
   /** Menu transférer + raccourcis (boîte de réception). */
   showTransferAction?: boolean;
+  /** Bouton retirer de l’onglet Transféré (colonne de droite). */
+  showHideFromTransferListAction?: boolean;
   transferShortcuts?: TransferShortcutItem[];
 };
 
@@ -33,6 +35,7 @@ export function BoiteMessagesList({
   showArchiveAction = false,
   showUnarchiveAction = false,
   showTransferAction = false,
+  showHideFromTransferListAction = false,
   transferShortcuts = [],
 }: BoiteMessagesListProps) {
   if (messages.length === 0) {
@@ -59,6 +62,7 @@ export function BoiteMessagesList({
             showArchiveAction={showArchiveAction}
             showUnarchiveAction={showUnarchiveAction}
             showTransferAction={showTransferAction}
+            showHideFromTransferListAction={showHideFromTransferListAction}
             transferShortcuts={transferShortcuts}
           />
         ))}

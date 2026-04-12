@@ -39,7 +39,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const result = await prisma.inboundMessage.updateMany({
     where: {
       id,
-      inboundAddress: { userId: user.id },
+      inboundAddress: { isActive: true },
     },
     data: { archived },
   });

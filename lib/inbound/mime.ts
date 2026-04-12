@@ -16,6 +16,11 @@ export type ParsedInboundMime = {
   htmlBody: string | null;
   headersJson: Record<string, string>;
   attachments: ParsedInboundAttachment[];
+  /**
+   * Expéditeur principal dérivé de l’objet `from` mailparser (les en-têtes bruts
+   * peuvent être des structures non converties correctement en chaîne).
+   */
+  envelopeFrom: string | null;
 };
 
 function headerValueToString(value: unknown): string {
@@ -85,6 +90,35 @@ export function buildHeaderLookup(headersJson: Record<string, string>): Map<stri
   return map;
 }
 
+function formatFirstMailbox(
+  obj?: { value?: Array<{ address?: string; name?: string }> },
+): string | null {
+  const vals = obj?.value;
+  if (!Array.isArray(vals) || vals.length === 0) {
+    return null;
+  }
+  const first = vals[0];
+  const addr = typeof first?.address === "string" ? first.address.trim() : "";
+  if (!addr || !addr.includes("@")) {
+    return null;
+  }
+  const name = typeof first?.name === "string" ? first.name.trim() : "";
+  if (name) {
+    return `${name} <${addr}>`;
+  }
+  return addr;
+}
+
+/**
+ * Adresse expéditeur fiable depuis mailparser (`from` / `sender`), pas depuis la sérialisation des en-têtes.
+ */
+function envelopeFromMailparser(parsed: {
+  from?: { value?: Array<{ address?: string; name?: string }> };
+  sender?: { value?: Array<{ address?: string; name?: string }> };
+}): string | null {
+  return formatFirstMailbox(parsed.from) ?? formatFirstMailbox(parsed.sender);
+}
+
 export async function parseInboundMime(rawMime: string): Promise<ParsedInboundMime> {
   const parsed = await simpleParser(rawMime);
 
@@ -94,6 +128,11 @@ export async function parseInboundMime(rawMime: string): Promise<ParsedInboundMi
     (h as Map<string, unknown>).forEach((value, key) => {
       headersJson[String(key)] = headerValueToString(value);
     });
+  }
+
+  const envelopeFrom = envelopeFromMailparser(parsed);
+  if (envelopeFrom) {
+    headersJson.From = envelopeFrom;
   }
 
   const messageIdHeader =
@@ -119,5 +158,6 @@ export async function parseInboundMime(rawMime: string): Promise<ParsedInboundMi
     htmlBody,
     headersJson,
     attachments: parseAttachmentsMeta(parsed),
+    envelopeFrom,
   };
 }

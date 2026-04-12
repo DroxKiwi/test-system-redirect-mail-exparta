@@ -1,6 +1,4 @@
-# Images publiées sur ghcr.io :
-#   - <owner>/<repo>              → application Next.js (Dockerfile racine)
-#   - <owner>/<repo>-smtp-gateway → passerelle SMTP Python (smtp-gateway/)
+# Image publiée sur ghcr.io : <owner>/<repo> → application Next.js (Dockerfile racine).
 #
 # Déclencheurs : push sur main, tags v* (ex. v1.0.0), déclenchement manuel.
 # Prérequis : packages GitHub activés ; migrations Prisma au démarrage du conteneur web (docker-entrypoint.sh).
@@ -68,26 +66,3 @@ jobs:
           labels: ${{ steps.meta_web.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
-
-      # --- Passerelle SMTP Python ---
-      - name: Métadonnées image smtp-gateway
-        id: meta_smtp
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-smtp-gateway
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
-
-      - name: Build et push image smtp-gateway
-        uses: docker/build-push-action@v6
-        with:
-          context: ./smtp-gateway
-          file: ./smtp-gateway/Dockerfile
-          push: true
-          tags: ${{ steps.meta_smtp.outputs.tags }}
-          labels: ${{ steps.meta_smtp.outputs.labels }}
-          cache-from: type=gha,scope=smtp-gateway
-          cache-to: type=gha,mode=max,scope=smtp-gateway

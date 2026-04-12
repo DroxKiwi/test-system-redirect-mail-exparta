@@ -12,10 +12,15 @@ export default async function ArchivePage() {
     redirect("/login");
   }
 
-  const messages = await loadBoiteMessages(user.id, true);
+  const messages = await loadBoiteMessages(true);
 
   return (
-    <DashboardShell currentTab="archive" title="Archive" userEmail={user.email}>
+    <DashboardShell
+      currentTab="archive"
+      title="Archive"
+      userEmail={user.email}
+      isAdmin={user.isAdmin}
+    >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
           Messages archivés : même présentation que la boîte de réception. Utilise l&apos;icône à

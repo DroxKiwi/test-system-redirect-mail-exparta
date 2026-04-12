@@ -1,6 +1,7 @@
 import { ArrowLeft, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { BoiteMarkReadOnOpen } from "@/components/boite-mark-read-on-open";
 import { MailHtmlPreview } from "@/components/mail-html-preview";
 import { MessageArchiveActions } from "@/components/message-archive-actions";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -24,6 +25,7 @@ type BoiteMessageDetail = {
   id: number;
   archived: boolean;
   correlationId: string | null;
+  gmailMessageId: string | null;
   readAt: Date | null;
   mailFrom: string;
   rcptTo: Prisma.JsonValue;
@@ -55,16 +57,24 @@ export default async function BoiteMessagePage(props: PageProps) {
     notFound();
   }
 
-  const message = (await prisma.inboundMessage.findFirst({
-    where: {
-      id,
-      inboundAddress: { userId: user.id },
-    },
-    include: {
-      inboundAddress: true,
-      attachments: { orderBy: { id: "asc" } },
-    } as unknown as Prisma.InboundMessageInclude,
-  })) as unknown as BoiteMessageDetail | null;
+  const [messageRaw, googleSettings] = await Promise.all([
+    prisma.inboundMessage.findFirst({
+      where: {
+        id,
+        inboundAddress: { isActive: true },
+      },
+      include: {
+        inboundAddress: true,
+        attachments: { orderBy: { id: "asc" } },
+      } as unknown as Prisma.InboundMessageInclude,
+    }),
+    prisma.googleOAuthSettings.findUnique({
+      where: { id: 1 },
+      select: { gmailMarkReadOnOpen: true },
+    }),
+  ]);
+
+  const message = messageRaw as unknown as BoiteMessageDetail | null;
 
   if (!message) {
     notFound();
@@ -87,9 +97,16 @@ export default async function BoiteMessagePage(props: PageProps) {
       currentTab={message.archived ? "archive" : "boite"}
       title={title}
       userEmail={user.email}
+      isAdmin={user.isAdmin}
       contentFrame={false}
     >
       <div className="w-full min-w-0 space-y-6">
+        <BoiteMarkReadOnOpen
+          messageId={message.id}
+          gmailMessageId={message.gmailMessageId}
+          alreadyRead={message.readAt != null}
+          enabled={googleSettings?.gmailMarkReadOnOpen === true}
+        />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href={backHref}

@@ -9,9 +9,10 @@ export default async function Home() {
   }
 
   return (
-    <DashboardShell currentTab="flux" title="Tableau de bord" userEmail={user.email}>
+    <DashboardShell title="Tableau de bord" userEmail={user.email} isAdmin={user.isAdmin}>
       <p className="text-sm text-muted-foreground">
-        Bienvenue. Tu peux commencer par configurer tes regles dans l&apos;onglet Flux.
+        Bienvenue. Configure tes regles dans l&apos;onglet Reglages et tes adresses d&apos;entree selon ton
+        deploiement.
       </p>
     </DashboardShell>
   );

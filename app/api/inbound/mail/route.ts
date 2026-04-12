@@ -53,7 +53,6 @@ export async function POST(request: Request) {
 
   await mailFlowLogSafe({
     correlationId,
-    userId: null,
     actor: "next",
     step: "api_inbound_received",
     direction: "in",
@@ -74,7 +73,6 @@ export async function POST(request: Request) {
     console.error("[inbound-mail] MIME parse error:", msg);
     await mailFlowLogSafe({
       correlationId,
-      userId: null,
       actor: "next",
       step: "api_inbound_mime_error",
       direction: "in",
@@ -106,7 +104,7 @@ export async function POST(request: Request) {
         domain: parts.domain,
         localPart: { equals: parts.localPart, mode: "insensitive" },
       },
-      select: { id: true, userId: true },
+      select: { id: true },
     });
 
     if (!addr) {
@@ -121,7 +119,6 @@ export async function POST(request: Request) {
     try {
       const { inboundMessageId } = await processInboundForAddress({
         inboundAddressId: addr.id,
-        userId: addr.userId,
         mailFrom,
         rcptTo: rcptList,
         rawMime,
@@ -134,7 +131,6 @@ export async function POST(request: Request) {
       console.error("[inbound-mail] process error", addr.id, msg);
       await mailFlowLogSafe({
         correlationId,
-        userId: addr.userId,
         actor: "next",
         step: "api_inbound_process_error",
         direction: "in",
@@ -148,7 +144,6 @@ export async function POST(request: Request) {
   if (seenAddressIds.size === 0) {
     await mailFlowLogSafe({
       correlationId,
-      userId: null,
       actor: "next",
       step: "api_inbound_no_recipient",
       direction: "in",

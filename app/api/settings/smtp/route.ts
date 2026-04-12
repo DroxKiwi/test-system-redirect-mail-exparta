@@ -14,14 +14,7 @@ export async function GET() {
   });
 
   const dbHost = row?.host?.trim() ?? "";
-  const envHost = process.env.SMTP_OUTBOUND_HOST?.trim() ?? "";
-
-  let activeSource: "database" | "environment" | "none" = "none";
-  if (dbHost) {
-    activeSource = "database";
-  } else if (envHost) {
-    activeSource = "environment";
-  }
+  const smtpConfigured = Boolean(dbHost && row?.fromAddress?.trim());
 
   return NextResponse.json({
     host: row?.host ?? "",
@@ -30,8 +23,7 @@ export async function GET() {
     authUser: row?.authUser ?? "",
     fromAddress: row?.fromAddress ?? "",
     hasPassword: Boolean(row?.authPassword?.trim()),
-    activeSource,
-    envConfigured: Boolean(envHost && process.env.SMTP_OUTBOUND_FROM?.trim()),
+    smtpConfigured,
   });
 }
 

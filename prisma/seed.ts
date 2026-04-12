@@ -60,13 +60,11 @@ async function main() {
         localPart_domain: { localPart: a.localPart, domain: a.domain },
       },
       create: {
-        userId: user.id,
         localPart: a.localPart,
         domain: a.domain,
         isActive: true,
       },
       update: {
-        userId: user.id,
         isActive: true,
       },
     });

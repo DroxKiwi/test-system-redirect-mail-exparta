@@ -8,7 +8,6 @@ export type MailFlowActor = "next" | "smtp-gateway";
  */
 export async function mailFlowLogSafe(params: {
   correlationId: string;
-  userId?: number | null;
   actor: MailFlowActor;
   step: string;
   direction: "in" | "out";
@@ -24,7 +23,6 @@ export async function mailFlowLogSafe(params: {
     await prisma.mailFlowEvent.create({
       data: {
         correlationId: params.correlationId,
-        userId: params.userId ?? undefined,
         actor: params.actor,
         step: params.step,
         direction: params.direction,

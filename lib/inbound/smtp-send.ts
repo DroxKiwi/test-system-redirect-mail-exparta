@@ -1,22 +1,31 @@
 import nodemailer from "nodemailer";
+import type { GmailSendForwardMeta } from "@/lib/gmail/send-mail";
+import { sendForwardViaGmail } from "@/lib/gmail/send-mail";
+import { getGmailClientFromDb } from "@/lib/gmail/oauth";
+import type { ForwardMailParams } from "@/lib/inbound/forward-mail-params";
 import { getOutboundSmtpConfig } from "@/lib/smtp-config";
 
-export type ForwardMailParams = {
-  to: string | string[];
-  subject: string;
-  text?: string;
-  html?: string;
-  replyTo?: string;
-};
+export type { ForwardMailParams };
+
+export type SendForwardResult =
+  | ({ channel: "gmail" } & GmailSendForwardMeta)
+  | { channel: "smtp" };
 
 /**
- * Envoie un message via SMTP (configuration BDD prioritaire, sinon .env).
+ * Transfert / envoi sortant : si un compte Gmail est connecté (OAuth + refresh token),
+ * envoi via l’API Gmail ; sinon SMTP sortant configuré en Réglages.
  */
-export async function sendForwardMail(params: ForwardMailParams): Promise<void> {
+export async function sendForwardMail(params: ForwardMailParams): Promise<SendForwardResult> {
+  const gmail = await getGmailClientFromDb();
+  if (gmail) {
+    const meta = await sendForwardViaGmail(gmail, params);
+    return { channel: "gmail", ...meta };
+  }
+
   const cfg = await getOutboundSmtpConfig();
   if (!cfg) {
     throw new Error(
-      "SMTP sortant non configure (Reglages > SMTP sortant ou variables SMTP_OUTBOUND_*)"
+      "Aucune methode d'envoi : connecte un compte Gmail (Reglages) ou configure le SMTP sortant (hote + expediteur)."
     );
   }
 
@@ -34,6 +43,12 @@ export async function sendForwardMail(params: ForwardMailParams): Promise<void> 
         ? params.to
         : "";
 
+  const nodemailerAttachments = params.attachments?.map((a) => ({
+    filename: a.filename,
+    content: a.content,
+    contentType: a.contentType,
+  }));
+
   await transporter.sendMail({
     from: cfg.from,
     to,
@@ -41,5 +56,7 @@ export async function sendForwardMail(params: ForwardMailParams): Promise<void> 
     subject: params.subject.trim() || "(sans sujet)",
     text: params.text?.trim() ? params.text : undefined,
     html: params.html?.trim() ? params.html : undefined,
+    ...(nodemailerAttachments?.length ? { attachments: nodemailerAttachments } : {}),
   });
+  return { channel: "smtp" };
 }
