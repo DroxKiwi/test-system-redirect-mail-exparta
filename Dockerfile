@@ -30,6 +30,7 @@ RUN npm ci && npm cache clean --force
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/README.md ./README.md
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
