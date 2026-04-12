@@ -1,3 +1,4 @@
+import { CloudMailboxProvider } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -6,6 +7,7 @@ import {
   GMAIL_OAUTH_SCOPES,
   getGmailOAuth2Client,
 } from "@/lib/gmail/oauth";
+import { getActiveCloudProvider } from "@/lib/mailbox/provider";
 
 const STATE_COOKIE = "gmail_oauth_state";
 const STATE_MAX_AGE_SEC = 600;
@@ -14,10 +16,19 @@ const STATE_MAX_AGE_SEC = 600;
  * Démarre le flux OAuth Google : redirection vers le consentement.
  * Prérequis : identifiants OAuth renseignés dans Reglages (base de données).
  */
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
+  }
+
+  const base = new URL(request.url);
+
+  const provider = await getActiveCloudProvider();
+  if (provider !== CloudMailboxProvider.GOOGLE) {
+    return NextResponse.redirect(
+      new URL("/reglages?gmail_oauth_error=wrong_provider", base.origin)
+    );
   }
 
   let oauth2: Awaited<ReturnType<typeof getGmailOAuth2Client>>;

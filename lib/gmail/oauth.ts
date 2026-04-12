@@ -1,4 +1,6 @@
+import { CloudMailboxProvider } from "@prisma/client";
 import { google } from "googleapis";
+import { getActiveCloudProvider } from "@/lib/mailbox/provider";
 import { prisma } from "@/lib/prisma";
 
 /** Lire, envoyer, modifier les libellés (lu, etc.). */
@@ -43,6 +45,10 @@ export async function getGmailOAuth2Client() {
  * Client Gmail API avec refresh token stocké en base.
  */
 export async function getGmailClientFromDb() {
+  const provider = await getActiveCloudProvider();
+  if (provider !== CloudMailboxProvider.GOOGLE) {
+    return null;
+  }
   const row = await prisma.googleOAuthSettings.findUnique({
     where: { id: 1 },
     select: { refreshToken: true },

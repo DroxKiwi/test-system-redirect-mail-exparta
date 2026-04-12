@@ -5,18 +5,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
-type BoiteGmailSyncProps = {
+type CloudProvider = "NONE" | "GOOGLE" | "OUTLOOK";
+
+type BoiteCloudSyncProps = {
   pollIntervalSeconds: number;
-  gmailConnected: boolean;
-  /** false = import de toute la boîte (réglages Gmail) */
-  gmailSyncUnreadOnly: boolean;
+  cloudConnected: boolean;
+  /** false = import de toute la boîte (réglages du fournisseur actif) */
+  syncUnreadOnly: boolean;
+  activeCloudProvider: CloudProvider;
 };
 
 export function BoiteGmailSync({
   pollIntervalSeconds,
-  gmailConnected,
-  gmailSyncUnreadOnly,
-}: BoiteGmailSyncProps) {
+  cloudConnected,
+  syncUnreadOnly,
+  activeCloudProvider,
+}: BoiteCloudSyncProps) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const inFlight = useRef(false);
@@ -28,7 +32,7 @@ export function BoiteGmailSync({
     inFlight.current = true;
     setSyncing(true);
     try {
-      const res = await fetch("/api/gmail/sync", { method: "POST" });
+      const res = await fetch("/api/mail/cloud-sync", { method: "POST" });
       if (res.ok) {
         router.refresh();
       }
@@ -41,7 +45,7 @@ export function BoiteGmailSync({
   const initialSyncDone = useRef(false);
 
   useEffect(() => {
-    if (!gmailConnected || pollIntervalSeconds <= 0) {
+    if (!cloudConnected || pollIntervalSeconds <= 0) {
       return;
     }
     if (initialSyncDone.current) {
@@ -49,32 +53,43 @@ export function BoiteGmailSync({
     }
     initialSyncDone.current = true;
     void runSync();
-  }, [gmailConnected, pollIntervalSeconds, runSync]);
+  }, [cloudConnected, pollIntervalSeconds, runSync]);
 
   useEffect(() => {
-    if (!gmailConnected || pollIntervalSeconds <= 0) {
+    if (!cloudConnected || pollIntervalSeconds <= 0) {
       return;
     }
     const id = window.setInterval(() => {
       void runSync();
     }, pollIntervalSeconds * 1000);
     return () => window.clearInterval(id);
-  }, [gmailConnected, pollIntervalSeconds, runSync]);
+  }, [cloudConnected, pollIntervalSeconds, runSync]);
 
-  if (!gmailConnected) {
+  if (activeCloudProvider === "NONE") {
     return (
       <p className="text-xs text-muted-foreground">
-        Connecte Gmail dans Reglages pour synchroniser ta boîte Google ici.
+        Choisis Gmail ou Outlook comme boite cloud dans Reglages pour activer la synchro ici.
       </p>
     );
   }
+
+  if (!cloudConnected) {
+    const hint =
+      activeCloudProvider === "GOOGLE"
+        ? "Connecte Gmail dans Reglages pour synchroniser ta boite Google ici."
+        : "Connecte Outlook dans Reglages pour synchroniser ta boite Microsoft ici.";
+    return <p className="text-xs text-muted-foreground">{hint}</p>;
+  }
+
+  const providerLabel =
+    activeCloudProvider === "GOOGLE" ? "Gmail" : "Outlook / Microsoft";
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
       {pollIntervalSeconds > 0 ? (
         <span>
-          Synchro Gmail : toutes les {pollIntervalSeconds} s (
-          {gmailSyncUnreadOnly ? (
+          Synchro {providerLabel} : toutes les {pollIntervalSeconds} s (
+          {syncUnreadOnly ? (
             <>
               <strong>non lus</strong> uniquement
             </>
@@ -95,7 +110,7 @@ export function BoiteGmailSync({
             disabled={syncing}
             onClick={() => void runSync()}
           >
-            {syncing ? "Synchronisation…" : "Synchroniser Gmail"}
+            {syncing ? "Synchronisation…" : `Synchroniser (${providerLabel})`}
           </Button>
         </>
       )}

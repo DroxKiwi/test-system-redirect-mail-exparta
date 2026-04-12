@@ -18,11 +18,11 @@ type BoiteMessagesListProps = {
   listAriaLabel: string;
   /** Icône archiver + infobulle (boîte de réception). */
   showArchiveAction?: boolean;
-  /** Icône désarchiver + infobulle (onglet Archive). */
+  /** Icône désarchiver + infobulle (liste Traité). */
   showUnarchiveAction?: boolean;
   /** Menu transférer + raccourcis (boîte de réception). */
   showTransferAction?: boolean;
-  /** Bouton retirer de l’onglet Transféré (colonne de droite). */
+  /** Bouton retirer de l’onglet Traité (colonne de droite). */
   showHideFromTransferListAction?: boolean;
   transferShortcuts?: TransferShortcutItem[];
 };

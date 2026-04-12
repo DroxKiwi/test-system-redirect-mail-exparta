@@ -175,6 +175,7 @@ export function BoiteComposeFab() {
         >
           <Button
             type="button"
+            data-tutorial-target="tutoriel-boite-compose"
             className="pointer-events-auto h-14 w-14 rounded-full shadow-lg [&_svg]:size-6"
             onClick={() => {
               setError(null);

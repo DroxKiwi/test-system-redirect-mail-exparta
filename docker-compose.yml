@@ -4,11 +4,13 @@
 # Fork : remplace droxkiwi dans `image:` ci-dessous par ton compte ou organisation GitHub.
 #
 # Démarrage : docker compose pull && docker compose up -d
-# (secrets applicatifs : INBOUND_SECRET, FIRST_SETUP_TOKEN, SMTP_*, etc. — voir .env)
+# (secrets : DATABASE_URL si Postgres externe, INBOUND_SECRET, FIRST_SETUP_TOKEN,
+#  WORKER_TRIGGER_SECRET pour le robot — voir .env.example)
 #
 # URLs :
 #   - Application     : http://localhost:3000
 #   - Postgres (hôte) : localhost:5788 → 5432 dans le réseau compose
+#   - Robot Python    : service `worker`, appelle l’API interne sur http://web:3000
 
 services:
   postgres:
@@ -43,6 +45,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/test-system-redirect-mail-exparta
       INBOUND_SECRET: ${INBOUND_SECRET:-change-me-inbound}
       FIRST_SETUP_TOKEN: ${FIRST_SETUP_TOKEN:-change-me-setup}
+      WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:-change-me-worker-trigger}
       NODE_ENV: production
     depends_on:
       postgres:
@@ -57,6 +60,24 @@ services:
       timeout: 5s
       retries: 18
       start_period: 90s
+
+  worker:
+    image: python:3.12-alpine
+    container_name: mail-exparta-worker
+    restart: unless-stopped
+    working_dir: /opt/linker
+    volumes:
+      - ./linker:/opt/linker:ro
+    command: ["python3", "-u", "robot.py"]
+    environment:
+      WORKER_TRIGGER_SECRET: ${WORKER_TRIGGER_SECRET:-change-me-worker-trigger}
+      NEXT_APP_BASE_URL: http://web:3000
+      INTERVAL_SECONDS: ${INTERVAL_SECONDS:-60}
+      TRIGGER_PATH: ${TRIGGER_PATH:-/api/internal/worker/trigger/tick}
+      PROCESS_LIMIT: ${PROCESS_LIMIT:-}
+    depends_on:
+      web:
+        condition: service_healthy
 
 volumes:
   postgres_data:

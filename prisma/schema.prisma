@@ -55,8 +55,72 @@ model InboundAddress {
   updatedAt  DateTime  @updatedAt
   messages   InboundMessage[]
   rules      Rule[]
+  filters    Filter[]
 
   @@unique([localPart, domain])
+}
+
+/// Filtre réutilisable : ensemble de conditions (sans actions). Branché en règle dans Automate.
+model Filter {
+  id               Int               @id @default(autoincrement())
+  inboundAddressId Int?
+  name             String
+  /// Note optionnelle pour l’utilisateur (non utilisée par le moteur).
+  description      String?
+  enabled          Boolean           @default(true)
+  priority         Int               @default(100)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  inboundAddress   InboundAddress?   @relation(fields: [inboundAddressId], references: [id], onDelete: SetNull)
+  conditions       FilterCondition[]
+  automationLinks AutomationOnFilter[]
+
+  @@index([enabled, priority])
+  @@index([inboundAddressId])
+}
+
+/// Automatisation : un ou plusieurs filtres (ET entre filtres) puis actions matérialisées dans une Rule.
+model Automation {
+  id               Int                   @id @default(autoincrement())
+  name             String
+  description      String?
+  enabled          Boolean               @default(true)
+  priority         Int                   @default(100)
+  stopProcessing   Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  filterLinks AutomationOnFilter[]
+  /// Règle exécutée par le moteur (conditions = fusion des filtres).
+  rule        Rule?
+
+  @@index([enabled, priority])
+}
+
+model AutomationOnFilter {
+  automationId Int
+  filterId     Int
+  sortOrder    Int        @default(0)
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  filter       Filter     @relation(fields: [filterId], references: [id], onDelete: Restrict)
+
+  @@id([automationId, filterId])
+  @@index([automationId])
+}
+
+model FilterCondition {
+  id            Int           @id @default(autoincrement())
+  filterId      Int
+  field         RuleField
+  headerName    String?
+  operator      RuleOperator
+  value         String
+  caseSensitive Boolean       @default(false)
+  /// Ordre d’affichage et d’évaluation (ET logique).
+  sortOrder     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  filter        Filter        @relation(fields: [filterId], references: [id], onDelete: Cascade)
+
+  @@index([filterId])
 }
 
 /// Message recu et persiste (MIME brut + extrait texte/HTML + en-tetes). Alimente la boite de reception.
@@ -80,8 +144,12 @@ model InboundMessage {
   archived          Boolean            @default(false)
   /// Si import Gmail API : id message Google (deduplication, pas de reimport).
   gmailMessageId    String?            @unique
+  /// Si import Microsoft Graph : id message Outlook / Graph (deduplication).
+  outlookMessageId  String?            @unique
   /// Masque l’entrée dans l’onglet Transféré (action utilisateur « retirer de la liste »).
   hiddenFromTransferList Boolean       @default(false)
+  /// Quand le moteur de règles a fini d’évaluer ce message (MTA, import cloud via worker, etc.).
+  rulesEvaluatedAt  DateTime?
   inboundAddress    InboundAddress     @relation(fields: [inboundAddressId], references: [id], onDelete: Cascade)
   attachments       InboundAttachment[]
   actionLogs        MessageActionLog[]
@@ -90,6 +158,7 @@ model InboundMessage {
   @@index([inboundAddressId, archived, receivedAt])
   @@index([messageIdHeader])
   @@index([correlationId])
+  @@index([rulesEvaluatedAt])
 }
 
 /// Metadonnees des pieces jointes (contenu reste dans rawMime ; evite de reparser a chaque liste).
@@ -115,7 +184,10 @@ model Rule {
   stopProcessing   Boolean          @default(true)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+  /// Si renseigné, cette règle est la projection d’une automatisation (ne pas éditer les conditions à la main).
+  automationId     Int?             @unique
   inboundAddress   InboundAddress?  @relation(fields: [inboundAddressId], references: [id], onDelete: Cascade)
+  automation       Automation?      @relation(fields: [automationId], references: [id], onDelete: Cascade)
   conditions       RuleCondition[]
   actions          RuleAction[]
   actionLogs       MessageActionLog[]
@@ -188,6 +260,10 @@ enum RuleActionType {
   REWRITE_SUBJECT
   PREPEND_TEXT
   DROP
+  /// Marquer le message comme archivé dans l’app (onglet Archive).
+  ARCHIVE
+  /// Envoyer un e-mail de réponse à l’expéditeur (transfert sortant vers mailFrom).
+  AUTO_REPLY
 }
 
 enum ActionLogStatus {
@@ -195,6 +271,36 @@ enum ActionLogStatus {
   SKIPPED
   SENT
   FAILED
+}
+
+/// Boîte cloud active pour import / envoi (Gmail API ou Microsoft Graph). Exclusif.
+enum CloudMailboxProvider {
+  NONE
+  GOOGLE
+  OUTLOOK
+}
+
+/// Singleton id = 1 : quel connecteur cloud est utilisé pour la boîte.
+model AppMailboxSettings {
+  id             Int                   @id @default(1)
+  activeProvider CloudMailboxProvider    @default(NONE)
+  updatedAt      DateTime              @updatedAt
+}
+
+/// Identifiants OAuth Microsoft (Graph Mail), singleton id = 1.
+model OutlookOAuthSettings {
+  id           Int      @id @default(1)
+  clientId     String   @default("")
+  clientSecret String?
+  redirectUri  String   @default("")
+  /// Tenant Azure AD : « common » pour comptes Microsoft personnels et organisations.
+  tenantId     String   @default("common")
+  refreshToken String?
+  /// Intervalle de synchro boîte (Graph), en secondes. 0 = pas d’auto-rafraîchissement.
+  outlookPollIntervalSeconds Int @default(0)
+  outlookSyncUnreadOnly      Boolean @default(true)
+  outlookMarkReadOnOpen      Boolean @default(false)
+  updatedAt    DateTime @updatedAt
 }
 
 /// Configuration SMTP sortante (singleton id = 1), éditée depuis les Réglages.

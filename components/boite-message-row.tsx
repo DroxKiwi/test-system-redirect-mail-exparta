@@ -20,10 +20,10 @@ type BoiteMessageRowProps = {
   m: BoiteListMessage;
   /** Bouton archiver (boîte de réception). */
   showArchiveAction?: boolean;
-  /** Bouton désarchiver (onglet Archive). */
+  /** Bouton désarchiver (liste Traité). */
   showUnarchiveAction?: boolean;
   showTransferAction?: boolean;
-  /** Retirer de la liste Transféré (colonne de droite). */
+  /** Retirer de la liste Traité (colonne de droite). */
   showHideFromTransferListAction?: boolean;
   transferShortcuts?: TransferShortcutItem[];
 };
@@ -132,7 +132,9 @@ export function BoiteMessageRow({
             }),
             m.gmailMessageId
               ? `Import Gmail · id message ${m.gmailMessageId}`
-              : null,
+              : m.outlookMessageId
+                ? `Import Outlook · id message ${m.outlookMessageId}`
+                : null,
           ]
             .filter(Boolean)
             .join(" · ")}

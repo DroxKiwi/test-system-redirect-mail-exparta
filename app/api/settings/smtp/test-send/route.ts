@@ -31,7 +31,7 @@ export async function POST() {
     await transporter.sendMail({
       from: cfg.from,
       to: user.email,
-      subject: "[Mail Proxy] Test d'envoi SMTP",
+      subject: "[Exparta Automata Mail] Test d'envoi SMTP",
       text: `Ceci est un message de test envoye depuis les reglages (configuration SMTP en base).`,
     });
   } catch (err) {

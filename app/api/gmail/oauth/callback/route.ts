@@ -1,7 +1,9 @@
+import { CloudMailboxProvider } from "@prisma/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-user";
 import { getGmailOAuth2Client } from "@/lib/gmail/oauth";
+import { getActiveCloudProvider } from "@/lib/mailbox/provider";
 import { prisma } from "@/lib/prisma";
 
 const STATE_COOKIE = "gmail_oauth_state";
@@ -15,6 +17,13 @@ export async function GET(request: Request) {
 
   if (!user) {
     return NextResponse.redirect(new URL("/login", base.origin));
+  }
+
+  const provider = await getActiveCloudProvider();
+  if (provider !== CloudMailboxProvider.GOOGLE) {
+    return NextResponse.redirect(
+      new URL("/reglages?gmail_oauth_error=wrong_provider", base.origin)
+    );
   }
 
   const { searchParams } = new URL(request.url);

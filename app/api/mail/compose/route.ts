@@ -1,8 +1,10 @@
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-user";
 import type { MailAttachmentInput } from "@/lib/inbound/forward-mail-params";
 import { sendForwardMail } from "@/lib/inbound/smtp-send";
+import { mailFlowLogSafe } from "@/lib/mail-flow-log";
 
 const MAX_BYTES_PER_FILE = 15 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 22 * 1024 * 1024;
@@ -110,6 +112,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const correlationId = `compose:${randomUUID()}`;
+
   try {
     await sendForwardMail({
       to: toList.length === 1 ? toList[0]! : toList,
@@ -118,8 +122,34 @@ export async function POST(request: Request) {
       html: outHtml,
       attachments: attachments.length > 0 ? attachments : undefined,
     });
+    await mailFlowLogSafe({
+      correlationId,
+      actor: "next",
+      step: "ui_compose_sent",
+      direction: "out",
+      summary: `Message rédigé dans la boîte, envoyé vers ${toList.join(", ")} — « ${(subject || "(sans sujet)").slice(0, 120)} »`,
+      detail: {
+        to: toList,
+        subject: subject || "(sans sujet)",
+        userEmail: user.email,
+        attachmentCount: attachments.length,
+      },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Echec envoi.";
+    await mailFlowLogSafe({
+      correlationId,
+      actor: "next",
+      step: "ui_compose_failed",
+      direction: "out",
+      summary: `Échec d\u2019envoi depuis la rédaction : ${msg.slice(0, 200)}`,
+      detail: {
+        to: toList,
+        subject: subject || "(sans sujet)",
+        userEmail: user.email,
+        error: msg,
+      },
+    });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 

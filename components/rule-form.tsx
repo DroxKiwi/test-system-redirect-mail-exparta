@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  defaultRuleActionRow,
+  RuleActionsEditor,
+  ruleActionRowsToPayload,
+  type RuleActionRow,
+} from "@/components/rule-actions-editor";
 
 type AddressOption = { id: number; localPart: string; domain: string };
 
@@ -42,29 +48,6 @@ const OPERATORS = [
   { value: "REGEX", label: "correspond a (regex)" },
 ] as const;
 
-const ACTION_TYPES = [
-  {
-    value: "FORWARD",
-    label: "Transfert",
-    hint: "Envoie une copie (ou le message modifie) vers une autre adresse.",
-  },
-  {
-    value: "REWRITE_SUBJECT",
-    label: "Reecrire le sujet",
-    hint: "Ajoute un prefixe ou remplace tout le sujet avant les actions suivantes.",
-  },
-  {
-    value: "PREPEND_TEXT",
-    label: "Prefixer le corps",
-    hint: "Ajoute du texte au debut du corps (texte brut).",
-  },
-  {
-    value: "DROP",
-    label: "Abandonner",
-    hint: "Ne pas transmettre le message (apres eventuelles modifs en memoire).",
-  },
-] as const;
-
 type ConditionRow = {
   key: string;
   field: string;
@@ -72,17 +55,6 @@ type ConditionRow = {
   operator: string;
   value: string;
   caseSensitive: boolean;
-};
-
-type ActionRow = {
-  key: string;
-  type: string;
-  order: number;
-  forwardTo: string;
-  subjectMode: "prefix" | "replace";
-  subjectPrefix: string;
-  subjectReplace: string;
-  prependText: string;
 };
 
 /** Cles pour nouvelles lignes : uniquement depuis des handlers client (pas dans l etat initial SSR). */
@@ -93,7 +65,15 @@ function newRowKey(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
+export function RuleForm({
+  addresses,
+  variant = "full",
+}: {
+  addresses: AddressOption[];
+  /** `filters` : uniquement critères + portée (actions vides, à compléter dans Automate). */
+  variant?: "filters" | "full";
+}) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [priority, setPriority] = useState(100);
@@ -111,18 +91,9 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
     },
   ]);
 
-  const [actions, setActions] = useState<ActionRow[]>([
-    {
-      key: "action-default",
-      type: "FORWARD",
-      order: 1,
-      forwardTo: "",
-      subjectMode: "prefix",
-      subjectPrefix: "",
-      subjectReplace: "",
-      prependText: "",
-    },
-  ]);
+  const [actions, setActions] = useState<RuleActionRow[]>(() =>
+    variant === "filters" ? [] : [defaultRuleActionRow()],
+  );
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,34 +130,6 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
     );
   }
 
-  function addAction() {
-    setActions((prev) => [
-      ...prev,
-      {
-        key: newRowKey("action"),
-        type: "FORWARD",
-        order: prev.length + 1,
-        forwardTo: "",
-        subjectMode: "prefix",
-        subjectPrefix: "",
-        subjectReplace: "",
-        prependText: "",
-      },
-    ]);
-  }
-
-  function removeAction(key: string) {
-    setActions((prev) =>
-      prev.length <= 1 ? prev : prev.filter((a) => a.key !== key)
-    );
-  }
-
-  function updateAction(key: string, patch: Partial<ActionRow>) {
-    setActions((prev) =>
-      prev.map((a) => (a.key === key ? { ...a, ...patch } : a))
-    );
-  }
-
   function buildPayload() {
     const condPayload = conditions.map((c) => ({
       field: c.field,
@@ -196,23 +139,8 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
       caseSensitive: c.caseSensitive,
     }));
 
-    const actPayload = actions.map((a) => {
-      let config: Record<string, unknown> = {};
-      if (a.type === "FORWARD") {
-        config = { to: a.forwardTo.trim() };
-      } else if (a.type === "REWRITE_SUBJECT") {
-        if (a.subjectMode === "prefix") {
-          config = { mode: "prefix", prefix: a.subjectPrefix };
-        } else {
-          config = { mode: "replace", subject: a.subjectReplace };
-        }
-      } else if (a.type === "PREPEND_TEXT") {
-        config = { text: a.prependText };
-      } else if (a.type === "DROP") {
-        config = {};
-      }
-      return { type: a.type, order: a.order, config };
-    });
+    const actPayload =
+      variant === "filters" ? [] : ruleActionRowsToPayload(actions);
 
     return {
       name: name.trim(),
@@ -223,6 +151,7 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
         inboundAddressId === "__all__" ? null : Number(inboundAddressId),
       conditions: condPayload,
       actions: actPayload,
+      ...(variant === "filters" ? { allowEmptyActions: true as const } : {}),
     };
   }
 
@@ -246,7 +175,7 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
       setName("");
       setConditions([
         {
-          key: newRowKey("condition"),
+          key: "condition-default",
           field: "SUBJECT",
           headerName: "",
           operator: "CONTAINS",
@@ -254,18 +183,10 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
           caseSensitive: false,
         },
       ]);
-      setActions([
-        {
-          key: newRowKey("action"),
-          type: "FORWARD",
-          order: 1,
-          forwardTo: "",
-          subjectMode: "prefix",
-          subjectPrefix: "",
-          subjectReplace: "",
-          prependText: "",
-        },
-      ]);
+      if (variant === "full") {
+        setActions([defaultRuleActionRow()]);
+      }
+      router.refresh();
     } catch {
       setError("Erreur reseau.");
     } finally {
@@ -277,12 +198,27 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
     <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
       <Card>
         <CardHeader>
-          <CardTitle>Comment fonctionne une regle ?</CardTitle>
+          <CardTitle>
+            {variant === "filters"
+              ? "Définir un filtre d’entrée"
+              : "Comment fonctionne une règle ?"}
+          </CardTitle>
           <CardDescription>
-            Une regle dit : <strong>si toutes les conditions</strong> ci-dessous sont
-            vraies (logique ET), alors on execute <strong>les actions</strong> dans
-            l&apos;ordre indique. Si tu coches &quot;Arreter apres cette regle&quot;, les
-            regles suivantes (priorite plus basse) ne seront pas evaluees.
+            {variant === "filters" ? (
+              <>
+                Tu définis <strong>quand</strong> un message correspond : toutes les conditions
+                ci-dessous doivent être vraies (ET logique). La règle est enregistrée{" "}
+                <strong>sans action</strong> pour l’instant ; ajoute transferts, sujet, etc. dans
+                l’onglet <strong>Automate</strong>.
+              </>
+            ) : (
+              <>
+                Une règle dit : <strong>si toutes les conditions</strong> ci-dessous sont vraies
+                (logique ET), alors on exécute <strong>les actions</strong> dans l&apos;ordre
+                indiqué. Si tu coches &quot;Arrêter après cette règle&quot;, les règles suivantes
+                (priorité plus basse) ne seront pas évaluées.
+              </>
+            )}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -303,15 +239,15 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>En-tete de la regle</CardTitle>
+          <CardTitle>{variant === "filters" ? "Portée et priorité" : "En-tête de la règle"}</CardTitle>
           <CardDescription>
-            Portee : une adresse d&apos;entree precise, ou toutes tes adresses si tu laisses
+            Portée : une adresse d&apos;entrée précise, ou toutes tes adresses si tu laisses
             &quot;Toutes&quot;.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="rule-name">Nom (affichage)</Label>
+            <Label htmlFor="rule-name">Nom du filtre / de la règle</Label>
             <Input
               id="rule-name"
               value={name}
@@ -398,7 +334,9 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
             <div>
               <CardTitle>Conditions (ET logique)</CardTitle>
               <CardDescription>
-                Toutes les lignes doivent etre vraies pour declencher les actions.
+                {variant === "filters"
+                  ? "Toutes les lignes doivent être vraies pour que ce filtre s’applique au message."
+                  : "Toutes les lignes doivent être vraies pour déclencher les actions."}
               </CardDescription>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={addCondition}>
@@ -523,178 +461,20 @@ export function RuleForm({ addresses }: { addresses: AddressOption[] }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Actions (ordre d&apos;execution)</CardTitle>
-              <CardDescription>
-                Executees dans l&apos;ordre croissant du champ &quot;Ordre&quot;. Les
-                modifications (sujet, corps) s&apos;appliquent en memoire avant un
-                eventuel transfert.
-              </CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={addAction}>
-              Ajouter une action
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          {actions.map((a, index) => (
-            <div key={a.key}>
-              {index > 0 ? <Separator className="mb-6" /> : null}
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Action {index + 1}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => removeAction(a.key)}
-                    disabled={pending || actions.length <= 1}
-                  >
-                    Retirer
-                  </Button>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label>Type</Label>
-                    <Select
-                      value={a.type}
-                      onValueChange={(v) => updateAction(a.key, { type: v })}
-                      disabled={pending}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ACTION_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {ACTION_TYPES.find((t) => t.value === a.type)?.hint}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`ord-${a.key}`}>Ordre</Label>
-                    <Input
-                      id={`ord-${a.key}`}
-                      type="number"
-                      min={1}
-                      value={a.order}
-                      onChange={(e) =>
-                        updateAction(a.key, { order: Number(e.target.value) })
-                      }
-                      disabled={pending}
-                    />
-                  </div>
-                </div>
-
-                {a.type === "FORWARD" ? (
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`ft-${a.key}`}>Transfert vers (e-mail)</Label>
-                    <Input
-                      id={`ft-${a.key}`}
-                      type="email"
-                      value={a.forwardTo}
-                      onChange={(e) =>
-                        updateAction(a.key, { forwardTo: e.target.value })
-                      }
-                      placeholder="compta@entreprise.com"
-                      disabled={pending}
-                    />
-                  </div>
-                ) : null}
-
-                {a.type === "REWRITE_SUBJECT" ? (
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2">
-                      <Label>Mode</Label>
-                      <Select
-                        value={a.subjectMode}
-                        onValueChange={(v) =>
-                          updateAction(a.key, {
-                            subjectMode: v as "prefix" | "replace",
-                          })
-                        }
-                        disabled={pending}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="prefix">Prefixer le sujet</SelectItem>
-                          <SelectItem value="replace">Remplacer tout le sujet</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {a.subjectMode === "prefix" ? (
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor={`sp-${a.key}`}>Prefixe</Label>
-                        <Input
-                          id={`sp-${a.key}`}
-                          value={a.subjectPrefix}
-                          onChange={(e) =>
-                            updateAction(a.key, { subjectPrefix: e.target.value })
-                          }
-                          placeholder="[FACTURE] "
-                          disabled={pending}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor={`sr-${a.key}`}>Nouveau sujet</Label>
-                        <Input
-                          id={`sr-${a.key}`}
-                          value={a.subjectReplace}
-                          onChange={(e) =>
-                            updateAction(a.key, { subjectReplace: e.target.value })
-                          }
-                          disabled={pending}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
-                {a.type === "PREPEND_TEXT" ? (
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`pt-${a.key}`}>Texte a ajouter en tete du corps</Label>
-                    <Textarea
-                      id={`pt-${a.key}`}
-                      value={a.prependText}
-                      onChange={(e) =>
-                        updateAction(a.key, { prependText: e.target.value })
-                      }
-                      rows={4}
-                      disabled={pending}
-                    />
-                  </div>
-                ) : null}
-
-                {a.type === "DROP" ? (
-                  <p className="text-sm text-muted-foreground">
-                    Aucun champ supplementaire : le message ne sera pas transmis apres
-                    cette action (selon le moteur que nous brancherons ensuite).
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {variant === "full" ? (
+        <RuleActionsEditor
+          actions={actions}
+          onActionsChange={setActions}
+          disabled={pending}
+        />
+      ) : null}
 
       <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-        {pending ? "Enregistrement…" : "Enregistrer la regle"}
+        {pending
+          ? "Enregistrement…"
+          : variant === "filters"
+            ? "Enregistrer le filtre"
+            : "Enregistrer la règle"}
       </Button>
     </form>
   );

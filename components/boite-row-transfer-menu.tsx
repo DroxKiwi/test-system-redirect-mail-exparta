@@ -90,7 +90,7 @@ export function BoiteRowTransferMenu({ messageId, shortcuts }: BoiteRowTransferM
       <DropdownMenuContent align="end" className="min-w-[14rem]">
         {shortcuts.length === 0 ? (
           <DropdownMenuItem disabled className="text-muted-foreground">
-            Aucun raccourci — ajoutez-en dans Transféré
+            Aucun raccourci — ajoutez-en dans Réglages
           </DropdownMenuItem>
         ) : (
           shortcuts.map((s) => {
@@ -149,7 +149,7 @@ export function BoiteRowTransferMenu({ messageId, shortcuts }: BoiteRowTransferM
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/transfere?raccourcis=1">Gérer les raccourcis</Link>
+          <Link href="/reglages?raccourcis=1">Gérer les raccourcis</Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

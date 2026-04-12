@@ -1,5 +1,8 @@
+import type { Prisma } from "@prisma/client";
+import { ActionLogStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-user";
+import { mailFlowLogSafe } from "@/lib/mail-flow-log";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -36,16 +39,46 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const archived = Boolean((body as { archived: unknown }).archived);
 
-  const result = await prisma.inboundMessage.updateMany({
+  const existing = await prisma.inboundMessage.findFirst({
     where: {
       id,
       inboundAddress: { isActive: true },
     },
+    select: { id: true, archived: true, correlationId: true, subject: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Message introuvable." }, { status: 404 });
+  }
+
+  await prisma.inboundMessage.update({
+    where: { id },
     data: { archived },
   });
 
-  if (result.count === 0) {
-    return NextResponse.json({ error: "Message introuvable." }, { status: 404 });
+  if (archived && !existing.archived) {
+    const correlationId =
+      existing.correlationId?.trim() || `ui-archive:${existing.id}`;
+    await prisma.messageActionLog.create({
+      data: {
+        inboundMessageId: id,
+        ruleId: null,
+        actionId: null,
+        status: ActionLogStatus.SENT,
+        detail: { type: "UI_ARCHIVE" } as Prisma.InputJsonValue,
+      },
+    });
+    await mailFlowLogSafe({
+      correlationId,
+      actor: "next",
+      step: "ui_message_archived_manual",
+      direction: "in",
+      summary: `Message #${id} archivé manuellement depuis la boîte`,
+      detail: {
+        inboundMessageId: id,
+        subject: existing.subject,
+      },
+    });
   }
 
   return NextResponse.json({ ok: true, archived });

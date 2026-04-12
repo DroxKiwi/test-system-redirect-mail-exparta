@@ -45,13 +45,13 @@ export function BoiteRowHideFromTransferButton({
           size="icon-sm"
           className="size-8 shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground"
           disabled={pending}
-          aria-label="Retirer de la liste des transferts"
+          aria-label="Retirer de la liste des messages traités"
           onClick={() => void hideFromList()}
         >
           <ListX className="size-4" aria-hidden />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">Retirer de la liste des transferts</TooltipContent>
+      <TooltipContent side="left">Retirer de la liste Traité</TooltipContent>
     </Tooltip>
   );
 }

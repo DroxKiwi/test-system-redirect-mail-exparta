@@ -15,6 +15,8 @@ export type BoiteListMessage = {
   attachments: { id: number }[];
   /** Présent si le message a été importé depuis l’API Gmail (identifiant côté Google). */
   gmailMessageId: string | null;
+  /** Présent si le message a été importé depuis Microsoft Graph. */
+  outlookMessageId: string | null;
 };
 
 /** Transfert réussi : règle FORWARD ou raccourci (journal SENT + type FORWARD). */
@@ -33,6 +35,42 @@ const whereHasSuccessfulForward: Prisma.InboundMessageWhereInput = {
   },
 };
 
+/** Trace affichée dans Traité (inclut archivage manuel dans l’historique). */
+const whereHasTreatmentLog: Prisma.InboundMessageWhereInput = {
+  actionLogs: {
+    some: {
+      status: ActionLogStatus.SENT,
+      OR: [
+        { action: { type: RuleActionType.FORWARD } },
+        { detail: { path: ["type"], equals: "FORWARD" } },
+        { detail: { path: ["type"], equals: "UI_ARCHIVE" } },
+        { detail: { path: ["type"], equals: "ARCHIVE" } },
+        { detail: { path: ["type"], equals: "AUTO_REPLY" } },
+        { detail: { path: ["type"], equals: "DROP" } },
+      ],
+    },
+  },
+};
+
+/**
+ * Traitements qui doivent exclure le message de la boîte (hors archivage seul : géré par `archived`).
+ * Sans UI_ARCHIVE : après désarchivage, le message peut revenir en réception.
+ */
+const whereHasInboxBlockingTreatment: Prisma.InboundMessageWhereInput = {
+  actionLogs: {
+    some: {
+      status: ActionLogStatus.SENT,
+      OR: [
+        { action: { type: RuleActionType.FORWARD } },
+        { detail: { path: ["type"], equals: "FORWARD" } },
+        { detail: { path: ["type"], equals: "ARCHIVE" } },
+        { detail: { path: ["type"], equals: "AUTO_REPLY" } },
+        { detail: { path: ["type"], equals: "DROP" } },
+      ],
+    },
+  },
+};
+
 const boiteListMessageSelect = {
   id: true,
   receivedAt: true,
@@ -42,6 +80,7 @@ const boiteListMessageSelect = {
   textBody: true,
   rcptTo: true,
   gmailMessageId: true,
+  outlookMessageId: true,
   inboundAddress: {
     select: { localPart: true, domain: true },
   },
@@ -51,11 +90,21 @@ const boiteListMessageSelect = {
 export const BOITE_INBOX_PER_PAGE_OPTIONS = [50, 100, 200] as const;
 export type BoiteInboxPerPage = (typeof BOITE_INBOX_PER_PAGE_OPTIONS)[number];
 
-function boiteWhere(archived: boolean): Prisma.InboundMessageWhereInput {
+export type BoiteInboxListExtras = {
+  /** Si true, seulement les messages sans date de lecture (non lus). */
+  unreadOnly?: boolean;
+};
+
+/** Boîte de réception : non archivés et sans aucune trace de traitement. */
+function inboxWhere(extras?: BoiteInboxListExtras): Prisma.InboundMessageWhereInput {
   return {
-    archived,
+    archived: false,
     inboundAddress: { isActive: true },
-    ...(archived ? {} : { NOT: whereHasSuccessfulForward }),
+    AND: [
+      { NOT: whereHasSuccessfulForward },
+      { NOT: whereHasInboxBlockingTreatment },
+    ],
+    ...(extras?.unreadOnly ? { readAt: null } : {}),
   };
 }
 
@@ -74,18 +123,55 @@ export function parseBoiteInboxPagination(sp: {
   return { page, perPage };
 }
 
-export async function countBoiteMessages(archived: boolean): Promise<number> {
-  return prisma.inboundMessage.count({ where: boiteWhere(archived) });
+export type BoiteInboxListQuery = {
+  page: number;
+  perPage: BoiteInboxPerPage;
+  unreadOnly: boolean;
+};
+
+export function parseBoiteInboxListQuery(sp: {
+  page?: string;
+  perPage?: string;
+  unread?: string;
+}): BoiteInboxListQuery {
+  const base = parseBoiteInboxPagination(sp);
+  const unreadOnly = sp.unread === "1" || sp.unread === "true";
+  return { ...base, unreadOnly };
+}
+
+/** Construit l’URL de la boîte avec pagination / filtre non lus. */
+export function boiteInboxListHref(input: {
+  page?: number;
+  perPage?: number;
+  unreadOnly?: boolean;
+}): string {
+  const p = new URLSearchParams();
+  if (input.page != null && input.page > 1) {
+    p.set("page", String(input.page));
+  }
+  if (input.perPage != null && input.perPage !== 50) {
+    p.set("perPage", String(input.perPage));
+  }
+  if (input.unreadOnly) {
+    p.set("unread", "1");
+  }
+  const q = p.toString();
+  return q ? `/boite?${q}` : "/boite";
+}
+
+export async function countBoiteMessages(
+  extras?: BoiteInboxListExtras,
+): Promise<number> {
+  return prisma.inboundMessage.count({ where: inboxWhere(extras) });
 }
 
 export async function loadBoiteMessages(
-  archived: boolean,
-  options?: { skip?: number; take?: number },
+  options?: { skip?: number; take?: number; extras?: BoiteInboxListExtras },
 ): Promise<BoiteListMessage[]> {
   const skip = options?.skip ?? 0;
   const take = options?.take ?? 150;
   return (await prisma.inboundMessage.findMany({
-    where: boiteWhere(archived),
+    where: inboxWhere(options?.extras),
     orderBy: { receivedAt: "desc" },
     skip,
     take,
@@ -93,16 +179,26 @@ export async function loadBoiteMessages(
   })) as unknown as BoiteListMessage[];
 }
 
-/** Messages pour lesquels une action FORWARD a reussi (regle ou raccourci manuel), non retirés par l’utilisateur. */
-export async function loadTransferredMessages(take = 150): Promise<BoiteListMessage[]> {
+/**
+ * Messages traités : archivés, ou avec transfert / trace d’action (règle, raccourci, etc.).
+ * Non retirés de la liste par l’utilisateur.
+ */
+export async function loadTraiteMessages(take = 150): Promise<BoiteListMessage[]> {
   return (await prisma.inboundMessage.findMany({
     where: {
       inboundAddress: { isActive: true },
       hiddenFromTransferList: false,
-      ...whereHasSuccessfulForward,
+      OR: [
+        { archived: true },
+        whereHasSuccessfulForward,
+        whereHasTreatmentLog,
+      ],
     },
     orderBy: { receivedAt: "desc" },
     take,
     select: boiteListMessageSelect,
   })) as unknown as BoiteListMessage[];
 }
+
+/** @deprecated Utiliser loadTraiteMessages */
+export const loadTransferredMessages = loadTraiteMessages;

@@ -174,3 +174,21 @@
 .compose-mail-sheet {
   animation: compose-mail-sheet-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Tutoriel guidé : halo autour de l’onglet ciblé */
+@keyframes tutorial-spotlight-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+}
+
+.tutorial-spotlight-pulse {
+  animation: tutorial-spotlight-pulse 1.35s ease-in-out infinite;
+  background: color-mix(in srgb, var(--primary) 30%, transparent);
+}

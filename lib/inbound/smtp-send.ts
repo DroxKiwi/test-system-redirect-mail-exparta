@@ -1,19 +1,23 @@
 import nodemailer from "nodemailer";
+import { getGmailClientFromDb } from "@/lib/gmail/oauth";
 import type { GmailSendForwardMeta } from "@/lib/gmail/send-mail";
 import { sendForwardViaGmail } from "@/lib/gmail/send-mail";
-import { getGmailClientFromDb } from "@/lib/gmail/oauth";
 import type { ForwardMailParams } from "@/lib/inbound/forward-mail-params";
 import { getOutboundSmtpConfig } from "@/lib/smtp-config";
+import { getOutlookAccessTokenFromDb } from "@/lib/outlook/oauth";
+import type { OutlookSendForwardMeta } from "@/lib/outlook/send-mail";
+import { sendForwardViaOutlook } from "@/lib/outlook/send-mail";
 
 export type { ForwardMailParams };
 
 export type SendForwardResult =
   | ({ channel: "gmail" } & GmailSendForwardMeta)
+  | ({ channel: "outlook" } & OutlookSendForwardMeta)
   | { channel: "smtp" };
 
 /**
- * Transfert / envoi sortant : si un compte Gmail est connecté (OAuth + refresh token),
- * envoi via l’API Gmail ; sinon SMTP sortant configuré en Réglages.
+ * Transfert / envoi sortant : compte cloud actif (Gmail ou Outlook) si connecté ;
+ * sinon SMTP sortant configuré en Réglages.
  */
 export async function sendForwardMail(params: ForwardMailParams): Promise<SendForwardResult> {
   const gmail = await getGmailClientFromDb();
@@ -22,10 +26,16 @@ export async function sendForwardMail(params: ForwardMailParams): Promise<SendFo
     return { channel: "gmail", ...meta };
   }
 
+  const outlookToken = await getOutlookAccessTokenFromDb();
+  if (outlookToken) {
+    const meta = await sendForwardViaOutlook(outlookToken, params);
+    return { channel: "outlook", ...meta };
+  }
+
   const cfg = await getOutboundSmtpConfig();
   if (!cfg) {
     throw new Error(
-      "Aucune methode d'envoi : connecte un compte Gmail (Reglages) ou configure le SMTP sortant (hote + expediteur)."
+      "Aucune methode d'envoi : connecte Gmail ou Outlook (Reglages) ou configure le SMTP sortant (hote + expediteur)."
     );
   }
 

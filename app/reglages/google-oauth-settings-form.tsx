@@ -93,9 +93,11 @@ export function GoogleOAuthSettingsForm() {
     if (err) {
       const labels: Record<string, string> = {
         no_refresh_token:
-          "Google n'a pas renvoye de jeton longue durée. Revoke l'app dans ton compte Google (applications) puis reconnecte.",
+          "Google n'a pas renvoyé de jeton longue durée. Révoque l'app dans ton compte Google (applications) puis reconnecte.",
         invalid_state: "Session OAuth expiree. Recommence la connexion.",
         not_configured: "Configure d'abord l'ID client, le secret et l'URI dans ce formulaire.",
+        wrong_provider:
+          "Le fournisseur boite cloud actif n'est pas Gmail. Selectionne Google Gmail dans la section ci-dessus.",
       };
       setError(labels[err] ?? `Erreur OAuth : ${err}`);
     }

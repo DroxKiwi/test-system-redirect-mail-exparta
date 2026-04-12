@@ -26,6 +26,7 @@ type BoiteMessageDetail = {
   archived: boolean;
   correlationId: string | null;
   gmailMessageId: string | null;
+  outlookMessageId: string | null;
   readAt: Date | null;
   mailFrom: string;
   rcptTo: Prisma.JsonValue;
@@ -57,7 +58,7 @@ export default async function BoiteMessagePage(props: PageProps) {
     notFound();
   }
 
-  const [messageRaw, googleSettings] = await Promise.all([
+  const [messageRaw, googleSettings, outlookSettings] = await Promise.all([
     prisma.inboundMessage.findFirst({
       where: {
         id,
@@ -71,6 +72,10 @@ export default async function BoiteMessagePage(props: PageProps) {
     prisma.googleOAuthSettings.findUnique({
       where: { id: 1 },
       select: { gmailMarkReadOnOpen: true },
+    }),
+    prisma.outlookOAuthSettings.findUnique({
+      where: { id: 1 },
+      select: { outlookMarkReadOnOpen: true },
     }),
   ]);
 
@@ -87,14 +92,22 @@ export default async function BoiteMessagePage(props: PageProps) {
   const title = subject ?? "Message";
   const headerRows = headersEntries(message.headers);
 
-  const backHref = message.archived ? "/archive" : "/boite";
+  const gmailId = message.gmailMessageId?.trim() ?? "";
+  const outlookId = message.outlookMessageId?.trim() ?? "";
+  const markReadOnOpenEnabled =
+    (gmailId.length > 0 && googleSettings?.gmailMarkReadOnOpen === true) ||
+    (outlookId.length > 0 && outlookSettings?.outlookMarkReadOnOpen === true);
+  const cloudProviderMessageId =
+    gmailId.length > 0 ? gmailId : outlookId.length > 0 ? outlookId : null;
+
+  const backHref = message.archived ? "/transfere" : "/boite";
   const backLabel = message.archived
-    ? "Retour à l'archive"
+    ? "Retour à Traité"
     : "Retour à la boîte de réception";
 
   return (
     <DashboardShell
-      currentTab={message.archived ? "archive" : "boite"}
+      currentTab={message.archived ? "transfere" : "boite"}
       title={title}
       userEmail={user.email}
       isAdmin={user.isAdmin}
@@ -103,9 +116,9 @@ export default async function BoiteMessagePage(props: PageProps) {
       <div className="w-full min-w-0 space-y-6">
         <BoiteMarkReadOnOpen
           messageId={message.id}
-          gmailMessageId={message.gmailMessageId}
+          cloudProviderMessageId={cloudProviderMessageId}
           alreadyRead={message.readAt != null}
-          enabled={googleSettings?.gmailMarkReadOnOpen === true}
+          enabled={markReadOnOpenEnabled}
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link

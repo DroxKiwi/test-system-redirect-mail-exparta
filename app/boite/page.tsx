@@ -1,21 +1,26 @@
 import { redirect } from "next/navigation";
 import { BoiteComposeFab } from "@/components/boite-compose-fab";
 import { BoiteGmailSync } from "@/components/boite-gmail-sync";
-import { BoiteInboxPagination } from "@/components/boite-inbox-pagination";
+import { BoiteInboxFilter } from "@/components/boite-inbox-filter";
 import { BoiteMessagesList } from "@/components/boite-messages-list";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { ListPageToolbar } from "@/components/list-page-toolbar";
 import { getSessionUser } from "@/lib/auth-user";
 import {
+  BOITE_INBOX_PER_PAGE_OPTIONS,
+  boiteInboxListHref,
   countBoiteMessages,
   loadBoiteMessages,
-  parseBoiteInboxPagination,
+  parseBoiteInboxListQuery,
+  type BoiteInboxPerPage,
 } from "@/lib/boite-messages";
+import { CloudMailboxProvider } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 type BoitePageProps = {
-  searchParams?: Promise<{ page?: string; perPage?: string }>;
+  searchParams?: Promise<{ page?: string; perPage?: string; unread?: string }>;
 };
 
 export default async function BoitePage({ searchParams }: BoitePageProps) {
@@ -25,33 +30,98 @@ export default async function BoitePage({ searchParams }: BoitePageProps) {
   }
 
   const sp = (await searchParams) ?? {};
-  const { page: rawPage, perPage } = parseBoiteInboxPagination(sp);
+  const { page: rawPage, perPage, unreadOnly } = parseBoiteInboxListQuery(sp);
+  const inboxExtras = { unreadOnly };
 
-  const [total, transferShortcuts, googleOAuth] = await Promise.all([
-    countBoiteMessages(false),
-    prisma.transferShortcut.findMany({
-      orderBy: { createdAt: "asc" },
-      select: { id: true, emails: true },
-    }),
-    prisma.googleOAuthSettings.findUnique({
-      where: { id: 1 },
-      select: {
-        gmailPollIntervalSeconds: true,
-        gmailSyncUnreadOnly: true,
-        refreshToken: true,
-      },
-    }),
-  ]);
+  const [total, transferShortcuts, mailbox, googleOAuth, outlookOAuth] =
+    await Promise.all([
+      countBoiteMessages(inboxExtras),
+      prisma.transferShortcut.findMany({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, emails: true },
+      }),
+      prisma.appMailboxSettings.findUnique({
+        where: { id: 1 },
+        select: { activeProvider: true },
+      }),
+      prisma.googleOAuthSettings.findUnique({
+        where: { id: 1 },
+        select: {
+          gmailPollIntervalSeconds: true,
+          gmailSyncUnreadOnly: true,
+          refreshToken: true,
+        },
+      }),
+      prisma.outlookOAuthSettings.findUnique({
+        where: { id: 1 },
+        select: {
+          outlookPollIntervalSeconds: true,
+          outlookSyncUnreadOnly: true,
+          refreshToken: true,
+        },
+      }),
+    ]);
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const page = Math.min(rawPage, totalPages);
   const skip = (page - 1) * perPage;
 
-  const messages = await loadBoiteMessages(false, { skip, take: perPage });
+  const messages = await loadBoiteMessages({
+    skip,
+    take: perPage,
+    extras: inboxExtras,
+  });
 
-  const gmailPollIntervalSeconds = googleOAuth?.gmailPollIntervalSeconds ?? 0;
-  const gmailSyncUnreadOnly = googleOAuth?.gmailSyncUnreadOnly !== false;
-  const gmailConnected = Boolean(googleOAuth?.refreshToken?.trim());
+  const activeCloudProvider =
+    mailbox?.activeProvider ?? CloudMailboxProvider.NONE;
+
+  const pollIntervalSeconds =
+    activeCloudProvider === CloudMailboxProvider.GOOGLE
+      ? (googleOAuth?.gmailPollIntervalSeconds ?? 0)
+      : activeCloudProvider === CloudMailboxProvider.OUTLOOK
+        ? (outlookOAuth?.outlookPollIntervalSeconds ?? 0)
+        : 0;
+
+  const syncUnreadOnly =
+    activeCloudProvider === CloudMailboxProvider.GOOGLE
+      ? googleOAuth?.gmailSyncUnreadOnly !== false
+      : activeCloudProvider === CloudMailboxProvider.OUTLOOK
+        ? outlookOAuth?.outlookSyncUnreadOnly !== false
+        : true;
+
+  const cloudConnected =
+    activeCloudProvider === CloudMailboxProvider.GOOGLE
+      ? Boolean(googleOAuth?.refreshToken?.trim())
+      : activeCloudProvider === CloudMailboxProvider.OUTLOOK
+        ? Boolean(outlookOAuth?.refreshToken?.trim())
+        : false;
+
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const to = Math.min(page * perPage, total);
+  const rangeLabel =
+    total === 0
+      ? unreadOnly
+        ? "Aucun message non lu."
+        : "Aucun message sur cette page."
+      : `${from}–${to} sur ${total} message${total > 1 ? "s" : ""}${
+          unreadOnly ? " (non lus)" : ""
+        }`;
+
+  const prevHref =
+    page > 1
+      ? boiteInboxListHref({ page: page - 1, perPage, unreadOnly })
+      : null;
+  const nextHref =
+    page < totalPages
+      ? boiteInboxListHref({ page: page + 1, perPage, unreadOnly })
+      : null;
+
+  const hrefForPerPage = (n: number) =>
+    boiteInboxListHref({
+      page: 1,
+      perPage: n as BoiteInboxPerPage,
+      unreadOnly,
+    });
 
   return (
     <DashboardShell
@@ -59,33 +129,57 @@ export default async function BoitePage({ searchParams }: BoitePageProps) {
       title="Boite de reception"
       userEmail={user.email}
       isAdmin={user.isAdmin}
+      headerToolbar={
+        <div data-tutorial-target="tutoriel-boite-toolbar">
+          <ListPageToolbar
+            rangeLabel={rangeLabel}
+            filterSlot={<BoiteInboxFilter unreadOnly={unreadOnly} perPage={perPage} />}
+            pagination={{
+              page,
+              totalPages,
+              prevHref,
+              nextHref,
+              perPage: {
+                value: perPage,
+                options: BOITE_INBOX_PER_PAGE_OPTIONS,
+                hrefForPerPage,
+              },
+            }}
+            paginationAriaLabel="Pagination de la boîte de réception"
+          />
+        </div>
+      }
     >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Messages enregistres (passerelle SMTP et/ou import Gmail), du plus recent au plus ancien.
-          Pagination 50 / 100 / 200 par page. Les messages déjà transférés avec succès ne figurent plus
-          ici (ils sont dans l&apos;onglet Transféré). Les messages archivés sont dans l&apos;onglet
-          Archive. Survoler l&apos;heure d&apos;un message importé depuis Gmail affiche
-          l&apos;identifiant côté API Google.
+          Messages enregistres (passerelle SMTP et/ou import Gmail ou Outlook), du plus recent au
+          plus ancien. Les messages déjà traités (transfert, règle, archivage) sont archivés : voir
+          l&apos;onglet <strong>Traité</strong>. Survoler
+          l&apos;heure d&apos;un message importé depuis le cloud affiche l&apos;identifiant côté API
+          (Google ou Microsoft).
         </p>
 
-        <BoiteInboxPagination page={page} perPage={perPage} total={total} />
+        <div data-tutorial-target="tutoriel-boite-sync">
+          <BoiteGmailSync
+            key={`${activeCloudProvider}-${cloudConnected ? "on" : "off"}`}
+            pollIntervalSeconds={pollIntervalSeconds}
+            cloudConnected={cloudConnected}
+            syncUnreadOnly={syncUnreadOnly}
+            activeCloudProvider={activeCloudProvider}
+          />
+        </div>
 
-        <BoiteGmailSync
-          pollIntervalSeconds={gmailPollIntervalSeconds}
-          gmailConnected={gmailConnected}
-          gmailSyncUnreadOnly={gmailSyncUnreadOnly}
-        />
-
-        <BoiteMessagesList
-          messages={messages}
-          emptyTitle="Aucun message"
-          emptyDescription="Des qu&apos;un mail arrive sur une adresse d&apos;entree (passerelle SMTP + regles), il apparaitra ici."
-          listAriaLabel="Messages recus"
-          showTransferAction
-          transferShortcuts={transferShortcuts}
-          showArchiveAction
-        />
+        <div data-tutorial-target="tutoriel-boite-liste">
+          <BoiteMessagesList
+            messages={messages}
+            emptyTitle="Aucun message"
+            emptyDescription="Des qu&apos;un mail arrive sur une adresse d&apos;entree (passerelle SMTP + regles), il apparaitra ici."
+            listAriaLabel="Messages recus"
+            showTransferAction
+            transferShortcuts={transferShortcuts}
+            showArchiveAction
+          />
+        </div>
 
         <BoiteComposeFab />
       </div>

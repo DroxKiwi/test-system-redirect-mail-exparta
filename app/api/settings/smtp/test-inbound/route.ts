@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const raw = [
     `From: mail-proxy-test@invalid.local`,
     `To: ${rcpt}`,
-    `Subject: [Mail Proxy] Test reception`,
+    `Subject: [Exparta Automata Mail] Test reception`,
     `Message-ID: <${msgId}@mail-proxy.test>`,
     `MIME-Version: 1.0`,
     `Content-Type: text/plain; charset=UTF-8`,

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { TutorialWrapper } from "@/components/tutorial";
 import { cn } from "@/lib/utils";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -15,8 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mail Proxy",
-  description: "Redirection et traitement du courrier entrant",
+  title: "Exparta Automata Mail",
+  description:
+    "Exparta Automata Mail — redirection, automatisation et suivi du courrier entrant.",
 };
 
 export default function RootLayout({
@@ -29,7 +31,9 @@ export default function RootLayout({
       lang="fr"
       className={cn("h-full", plusJakarta.variable, geistMono.variable, "font-sans")}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <TutorialWrapper>{children}</TutorialWrapper>
+      </body>
     </html>
   );
 }

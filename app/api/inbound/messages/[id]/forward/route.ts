@@ -1,8 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { ActionLogStatus } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-user";
 import { sendForwardMail } from "@/lib/inbound/smtp-send";
+import { mailFlowLogSafe } from "@/lib/mail-flow-log";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -63,6 +65,7 @@ export async function POST(request: Request, context: RouteContext) {
       subject: true,
       textBody: true,
       htmlBody: true,
+      correlationId: true,
     },
   });
 
@@ -71,6 +74,9 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const toList = shortcut.emails;
+  const correlationId =
+    message.correlationId?.trim() ||
+    `shortcut-forward:${message.id}:${randomUUID()}`;
 
   try {
     const sendResult = await sendForwardMail({
@@ -90,6 +96,10 @@ export async function POST(request: Request, context: RouteContext) {
       detail.outboundRfcMessageId = sendResult.outboundRfcMessageId;
       detail.gmailSentMessageId = sendResult.gmailSentMessageId;
     }
+    if (sendResult.channel === "outlook") {
+      detail.outboundRfcMessageId = sendResult.outboundRfcMessageId;
+      detail.outlookSentMessageId = sendResult.outlookSentMessageId;
+    }
 
     await prisma.messageActionLog.create({
       data: {
@@ -101,9 +111,41 @@ export async function POST(request: Request, context: RouteContext) {
       },
     });
 
+    await mailFlowLogSafe({
+      correlationId,
+      actor: "next",
+      step: "ui_transfer_shortcut_sent",
+      direction: "out",
+      summary: `Transfert manuel vers ${toList.join(", ")} (raccourci #${shortcut.id}, message #${message.id})`,
+      detail: {
+        inboundMessageId: message.id,
+        shortcutId: shortcut.id,
+        to: toList,
+        subject: message.subject,
+      },
+    });
+
+    await prisma.inboundMessage.update({
+      where: { id: message.id },
+      data: { archived: true },
+    });
+
     return NextResponse.json({ ok: true, to: toList, shortcutId: shortcut.id });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur envoi";
+    await mailFlowLogSafe({
+      correlationId,
+      actor: "next",
+      step: "ui_transfer_shortcut_failed",
+      direction: "out",
+      summary: `Échec transfert manuel (message #${message.id}) : ${msg.slice(0, 200)}`,
+      detail: {
+        inboundMessageId: message.id,
+        shortcutId: shortcut.id,
+        to: toList,
+        error: msg,
+      },
+    });
     await prisma.messageActionLog.create({
       data: {
         inboundMessageId: message.id,

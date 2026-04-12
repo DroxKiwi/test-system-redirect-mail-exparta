@@ -33,7 +33,7 @@ function buildRawMime(input: {
 async function main() {
   const passwordHash = await hash("SeedDemo!2026", 12);
 
-  const user = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: "demo.seed@exparta.test" },
     create: {
       email: "demo.seed@exparta.test",

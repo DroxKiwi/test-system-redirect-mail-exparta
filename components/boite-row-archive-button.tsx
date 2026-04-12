@@ -49,7 +49,7 @@ export function BoiteRowArchiveButton({ messageId }: BoiteRowArchiveButtonProps)
           <Archive className="size-4" aria-hidden />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">Archiver</TooltipContent>
+      <TooltipContent side="left">Archiver (message dans Traité)</TooltipContent>
     </Tooltip>
   );
 }
