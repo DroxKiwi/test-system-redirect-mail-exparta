@@ -1,9 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { ActionLogStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 

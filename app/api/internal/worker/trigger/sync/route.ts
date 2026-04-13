@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assertWorkerBearer } from "@/lib/worker-auth";
+import { assertWorkerBearer } from "@/lib/auth/worker-auth";
 import { runCloudInboxSync } from "@/lib/mail/cloud-sync";
 
 export const runtime = "nodejs";

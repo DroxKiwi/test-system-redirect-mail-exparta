@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { BoiteComposeFab } from "@/components/boite-compose-fab";
-import { BoiteGmailSync } from "@/components/boite-gmail-sync";
-import { BoiteInboxFilter } from "@/components/boite-inbox-filter";
-import { BoiteMessagesList } from "@/components/boite-messages-list";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { ListPageToolbar } from "@/components/list-page-toolbar";
-import { getSessionUser } from "@/lib/auth-user";
+import { BoiteComposeFab } from "@/components/boite/boite-compose-fab";
+import { BoiteGmailSync } from "@/components/boite/boite-gmail-sync";
+import { BoiteInboxFilter } from "@/components/boite/boite-inbox-filter";
+import { BoiteMessagesList } from "@/components/boite/boite-messages-list";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { ListPageToolbar } from "@/components/layout/list-page-toolbar";
+import { getSessionUser } from "@/lib/auth";
 import {
   BOITE_INBOX_PER_PAGE_OPTIONS,
   boiteInboxListHref,
@@ -13,9 +13,9 @@ import {
   loadBoiteMessages,
   parseBoiteInboxListQuery,
   type BoiteInboxPerPage,
-} from "@/lib/boite-messages";
+} from "@/lib/boite/boite-messages";
 import { CloudMailboxProvider } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
 

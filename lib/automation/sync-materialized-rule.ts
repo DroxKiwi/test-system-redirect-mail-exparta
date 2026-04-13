@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import type { ActionInput } from "@/lib/rules-payload";
+import { prisma } from "@/lib/db/prisma";
+import type { ActionInput } from "@/lib/rules/rules-payload";
 import { buildMergedConditionsFromFilterIds } from "@/lib/automation/merge-filters-for-rule";
 
 /** Garde l’ordre, supprime les doublons. */

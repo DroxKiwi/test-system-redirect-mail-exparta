@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { BoiteMessagesList } from "@/components/boite-messages-list";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { getSessionUser } from "@/lib/auth-user";
-import { loadTraiteMessages } from "@/lib/boite-messages";
+import { BoiteMessagesList } from "@/components/boite/boite-messages-list";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getSessionUser } from "@/lib/auth";
+import { loadTraiteMessages } from "@/lib/boite/boite-messages";
 
 export const dynamic = "force-dynamic";
 

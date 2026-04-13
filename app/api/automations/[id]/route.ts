@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
-import { validateActions, type ActionInput } from "@/lib/rules-payload";
+import { getSessionUser } from "@/lib/auth";
+import { validateActions, type ActionInput } from "@/lib/rules/rules-payload";
 import { MergeFiltersError } from "@/lib/automation/merge-filters-for-rule";
 import {
   deleteAutomationCascade,
   updateAutomationWithMaterializedRule,
 } from "@/lib/automation/sync-materialized-rule";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 

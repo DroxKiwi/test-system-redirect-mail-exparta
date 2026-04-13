@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
-import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db/prisma";
 
 /**
  * Simule la passerelle : POST vers /api/inbound/mail avec un petit MIME (meme secret que la prod).

@@ -315,6 +315,18 @@ model SmtpOutboundSettings {
   updatedAt    DateTime @updatedAt
 }
 
+/// Connexion à un serveur Ollama distant (singleton id = 1), éditée depuis les Réglages.
+model OllamaSettings {
+  id        Int      @id @default(1)
+  /// URL de base (ex. https://ollama.example.com), sans slash final recommandé.
+  baseUrl   String   @default("")
+  /// Valeur de l’en-tête X-API-Key si le proxy l’exige.
+  apiKey    String?
+  /// Nom du modèle Ollama (ex. llama3.2), listé via GET /api/tags sur le serveur.
+  model     String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
 /// Identifiants OAuth Google (Gmail API), singleton id = 1, édités depuis les Réglages.
 model GoogleOAuthSettings {
   id           Int      @id @default(1)

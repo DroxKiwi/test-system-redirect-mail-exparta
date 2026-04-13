@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import type { ParsedInboundMime } from "@/lib/inbound/mime";
 import { runRulesEngineForInboundMessage } from "@/lib/inbound/rule-runner";
 

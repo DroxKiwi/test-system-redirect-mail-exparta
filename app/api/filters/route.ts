@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { getSessionUser } from "@/lib/auth-user";
-import { type ConditionInput, validateConditions } from "@/lib/rules-payload";
-import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
+import { type ConditionInput, validateConditions } from "@/lib/rules/rules-payload";
+import { prisma } from "@/lib/db/prisma";
 
 export async function GET() {
   const user = await getSessionUser();

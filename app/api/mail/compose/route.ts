@@ -1,10 +1,10 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import type { MailAttachmentInput } from "@/lib/inbound/forward-mail-params";
 import { sendForwardMail } from "@/lib/inbound/smtp-send";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
 
 const MAX_BYTES_PER_FILE = 15 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 22 * 1024 * 1024;

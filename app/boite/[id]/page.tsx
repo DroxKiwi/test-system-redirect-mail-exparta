@@ -1,19 +1,19 @@
 import { ArrowLeft, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { BoiteMarkReadOnOpen } from "@/components/boite-mark-read-on-open";
-import { MailHtmlPreview } from "@/components/mail-html-preview";
-import { MessageArchiveActions } from "@/components/message-archive-actions";
-import { DashboardShell } from "@/components/dashboard-shell";
+import { BoiteMarkReadOnOpen } from "@/components/boite/boite-mark-read-on-open";
+import { MailHtmlPreview } from "@/components/mail/mail-html-preview";
+import { MessageArchiveActions } from "@/components/boite/message-archive-actions";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Separator } from "@/components/ui/separator";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import {
   formatRcpt,
   headersEntries,
   senderLabel,
-} from "@/lib/mail-display";
+} from "@/lib/mail/mail-display";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
 

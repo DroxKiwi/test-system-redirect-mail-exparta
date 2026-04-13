@@ -2,7 +2,7 @@ import { CloudMailboxProvider } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import { getActiveCloudProvider } from "@/lib/mailbox/provider";
 import {
   buildOutlookAuthorizeUrl,

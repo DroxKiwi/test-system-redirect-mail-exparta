@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { prisma } from "@/lib/db/prisma";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 function isAssetPath(pathname: string) {
   if (pathname === "/favicon.ico") {

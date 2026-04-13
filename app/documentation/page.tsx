@@ -2,9 +2,9 @@ import { readFile } from "fs/promises";
 import path from "path";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { DocumentationMarkdown } from "@/components/documentation-markdown";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { getSessionUser } from "@/lib/auth-user";
+import { DocumentationMarkdown } from "@/components/docs/documentation-markdown";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getSessionUser } from "@/lib/auth";
 
 const OFFICIAL_REPO_URL =
   "https://github.com/DroxKiwi/test-system-redirect-mail-exparta" as const;

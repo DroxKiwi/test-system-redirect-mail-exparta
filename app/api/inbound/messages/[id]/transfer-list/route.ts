@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
-import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 

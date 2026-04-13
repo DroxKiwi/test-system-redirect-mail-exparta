@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import { runCloudInboxSync } from "@/lib/mail/cloud-sync";
 
 export const runtime = "nodejs";

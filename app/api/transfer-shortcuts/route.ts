@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
-import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db/prisma";
 import {
   normalizeEmailArrayInput,
   parseEmailsFromText,
   validateDestinataireList,
-} from "@/lib/transfer-shortcut-utils";
+} from "@/lib/reglages/transfer-shortcut-utils";
 
 export async function GET() {
   const user = await getSessionUser();

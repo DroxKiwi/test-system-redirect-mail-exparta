@@ -1,8 +1,8 @@
 import { compare } from "bcryptjs";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { prisma } from "@/lib/db/prisma";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
 

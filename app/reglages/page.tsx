@@ -6,10 +6,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { getSessionUser } from "@/lib/auth-user";
-import { ReglagesTransferShortcutsCard } from "@/components/reglages-transfer-shortcuts-card";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getSessionUser } from "@/lib/auth";
+import { ReglagesTransferShortcutsCard } from "@/components/reglages/reglages-transfer-shortcuts-card";
 import { CloudMailboxSettings } from "./cloud-mailbox-settings";
+import { OllamaSettingsForm } from "./ollama-settings-form";
 
 export default async function ReglagesPage() {
   const user = await getSessionUser();
@@ -42,6 +43,8 @@ export default async function ReglagesPage() {
             <CloudMailboxSettings />
           </div>
         </Suspense>
+
+        <OllamaSettingsForm />
       </div>
     </DashboardShell>
   );

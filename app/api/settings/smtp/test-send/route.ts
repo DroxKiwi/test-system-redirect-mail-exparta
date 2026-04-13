@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
-import { getOutboundSmtpConfig } from "@/lib/smtp-config";
+import { getSessionUser } from "@/lib/auth";
+import { getOutboundSmtpConfig } from "@/lib/smtp/smtp-config";
 
 export async function POST() {
   const user = await getSessionUser();

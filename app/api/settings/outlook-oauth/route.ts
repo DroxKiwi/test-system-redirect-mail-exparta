@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import { isAllowedGmailPollIntervalSeconds } from "@/lib/gmail/poll-interval";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 export async function GET() {
   const user = await getSessionUser();

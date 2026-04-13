@@ -2,10 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { ActionLogStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import { sendForwardMail } from "@/lib/inbound/smtp-send";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 

@@ -6,10 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { AutomateWorkspace } from "@/components/automate-workspace";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { getSessionUser } from "@/lib/auth-user";
-import { prisma } from "@/lib/prisma";
+import { AutomateWorkspace } from "@/components/automation/automate-workspace";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db/prisma";
 
 export default async function AutomatePage() {
   const user = await getSessionUser();

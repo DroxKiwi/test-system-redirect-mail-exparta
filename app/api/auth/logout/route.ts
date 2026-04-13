@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { prisma } from "@/lib/db/prisma";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 export async function POST() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;

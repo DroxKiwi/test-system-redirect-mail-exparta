@@ -5,8 +5,8 @@ import {
   type RuleAction,
   type RuleCondition,
 } from "@prisma/client";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 import { evaluateCondition } from "./conditions";
 import type { ParsedInboundMime } from "./mime";
 import { sendForwardMail } from "./smtp-send";

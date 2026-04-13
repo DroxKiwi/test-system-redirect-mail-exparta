@@ -1,5 +1,5 @@
 import { CloudMailboxProvider } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 export async function ensureAppMailboxSettingsRow(): Promise<void> {
   await prisma.appMailboxSettings.upsert({

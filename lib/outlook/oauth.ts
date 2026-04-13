@@ -1,6 +1,6 @@
 import { CloudMailboxProvider } from "@prisma/client";
 import { getActiveCloudProvider } from "@/lib/mailbox/provider";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 /** Scopes Graph pour lire/écrire le courrier et obtenir un refresh token. */
 export const OUTLOOK_OAUTH_SCOPE =

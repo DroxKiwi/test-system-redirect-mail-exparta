@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 /**
  * Supprime tout l’historique mail côté app (messages entrants, pièces jointes, journaux d’actions)

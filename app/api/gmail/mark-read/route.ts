@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import { getGmailClientFromDb } from "@/lib/gmail/oauth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { getOutlookAccessTokenFromDb } from "@/lib/outlook/oauth";
 
 export const runtime = "nodejs";

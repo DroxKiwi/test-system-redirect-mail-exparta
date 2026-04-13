@@ -1,8 +1,8 @@
 import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requireAdminApiUser } from "@/lib/require-admin";
-import { prisma } from "@/lib/prisma";
+import { requireAdminApiUser } from "@/lib/auth/require-admin";
+import { prisma } from "@/lib/db/prisma";
 
 const MIN_PASSWORD_LEN = 8;
 

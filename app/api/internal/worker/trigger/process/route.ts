@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runRulesForPendingInboundMessages } from "@/lib/inbound/rule-worker";
-import { assertWorkerBearer } from "@/lib/worker-auth";
+import { assertWorkerBearer } from "@/lib/auth/worker-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

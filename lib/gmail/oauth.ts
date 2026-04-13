@@ -1,7 +1,7 @@
 import { CloudMailboxProvider } from "@prisma/client";
 import { google } from "googleapis";
 import { getActiveCloudProvider } from "@/lib/mailbox/provider";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 /** Lire, envoyer, modifier les libellés (lu, etc.). */
 export const GMAIL_OAUTH_SCOPES = [

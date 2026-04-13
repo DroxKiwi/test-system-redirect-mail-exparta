@@ -1,7 +1,7 @@
 import { ActionLogStatus } from "@prisma/client";
 import { normalizeRfcMessageId } from "@/lib/gmail/rfc-message-id";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 
 /**
  * Extrait le Message-ID du message d’origine depuis une notification d’échec (souvent

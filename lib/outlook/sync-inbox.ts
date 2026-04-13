@@ -1,8 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { buildHeaderLookup, parseInboundMime } from "@/lib/inbound/mime";
 import { markForwardFailedIfImportedMessageIsBounce } from "@/lib/gmail/reconcile-forward-bounce";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 import { getOutlookAccessTokenFromDb } from "./oauth";
 
 const OUTLOOK_SYNC_LOCAL = "outlook-sync";

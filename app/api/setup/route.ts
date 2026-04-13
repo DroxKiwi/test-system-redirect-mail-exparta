@@ -2,8 +2,8 @@ import { hash } from "bcryptjs";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { prisma } from "@/lib/db/prisma";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
 const MIN_PASSWORD_LEN = 8;

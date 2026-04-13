@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { getSessionUser } from "@/lib/auth-user";
-import { prisma } from "@/lib/prisma";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db/prisma";
 import { UsersAdminPanel } from "./users-admin-panel";
 
 export const dynamic = "force-dynamic";

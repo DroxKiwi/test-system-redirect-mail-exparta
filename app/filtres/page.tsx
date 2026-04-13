@@ -6,10 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { FiltresWorkspace } from "@/components/filtres-workspace";
-import { getSessionUser } from "@/lib/auth-user";
-import { prisma } from "@/lib/prisma";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { FiltresWorkspace } from "@/components/filters/filtres-workspace";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db/prisma";
 
 export default async function FiltresPage() {
   const user = await getSessionUser();

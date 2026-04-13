@@ -192,3 +192,57 @@
   animation: tutorial-spotlight-pulse 1.35s ease-in-out infinite;
   background: color-mix(in srgb, var(--primary) 30%, transparent);
 }
+
+/* Bulle manga au-dessus du buddy Ollama */
+@keyframes ollama-buddy-bubble-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.82);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.06);
+  }
+  68% {
+    transform: translateY(4px) scale(0.96);
+  }
+  85% {
+    transform: translateY(-2px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ollama-buddy-bubble-animate {
+  transform-origin: 50% 100%;
+  animation: ollama-buddy-bubble-in 0.55s cubic-bezier(0.34, 1.35, 0.55, 1) both;
+}
+
+.ollama-buddy-chat-bubble-animate {
+  transform-origin: 0% 100%;
+  animation: ollama-buddy-bubble-in 0.55s cubic-bezier(0.34, 1.35, 0.55, 1) both;
+}
+
+/* Fil de discussion : bulles utilisateur (vers le buddy) / assistant */
+.ollama-buddy-bubble-animate-user {
+  transform-origin: 100% 100%;
+  animation: ollama-buddy-bubble-in 0.55s cubic-bezier(0.34, 1.35, 0.55, 1) both;
+}
+
+.ollama-buddy-bubble-animate-assistant {
+  transform-origin: 0% 100%;
+  animation: ollama-buddy-bubble-in 0.55s cubic-bezier(0.34, 1.35, 0.55, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ollama-buddy-bubble-animate,
+  .ollama-buddy-chat-bubble-animate,
+  .ollama-buddy-bubble-animate-user,
+  .ollama-buddy-bubble-animate-assistant {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

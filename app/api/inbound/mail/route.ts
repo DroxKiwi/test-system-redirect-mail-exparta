@@ -5,8 +5,8 @@ import { processInboundForAddress } from "@/lib/inbound/rule-runner";
 import {
   mailFlowLogSafe,
   normalizeCorrelationId,
-} from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+} from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

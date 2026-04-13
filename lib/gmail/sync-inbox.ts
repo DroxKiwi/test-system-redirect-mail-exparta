@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { buildHeaderLookup, parseInboundMime } from "@/lib/inbound/mime";
-import { mailFlowLogSafe } from "@/lib/mail-flow-log";
-import { prisma } from "@/lib/prisma";
+import { mailFlowLogSafe } from "@/lib/mail/mail-flow-log";
+import { prisma } from "@/lib/db/prisma";
 import { resolveMailFromFromGmailApiHeaders } from "@/lib/gmail/gmail-from-header";
 import { markForwardFailedIfImportedMessageIsBounce } from "@/lib/gmail/reconcile-forward-bounce";
 import { getGmailClientFromDb } from "./oauth";

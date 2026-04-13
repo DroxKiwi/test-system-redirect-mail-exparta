@@ -3,7 +3,7 @@ import { getGmailClientFromDb } from "@/lib/gmail/oauth";
 import type { GmailSendForwardMeta } from "@/lib/gmail/send-mail";
 import { sendForwardViaGmail } from "@/lib/gmail/send-mail";
 import type { ForwardMailParams } from "@/lib/inbound/forward-mail-params";
-import { getOutboundSmtpConfig } from "@/lib/smtp-config";
+import { getOutboundSmtpConfig } from "@/lib/smtp/smtp-config";
 import { getOutlookAccessTokenFromDb } from "@/lib/outlook/oauth";
 import type { OutlookSendForwardMeta } from "@/lib/outlook/send-mail";
 import { sendForwardViaOutlook } from "@/lib/outlook/send-mail";

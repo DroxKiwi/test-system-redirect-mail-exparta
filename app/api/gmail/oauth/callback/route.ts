@@ -1,10 +1,10 @@
 import { CloudMailboxProvider } from "@prisma/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth-user";
+import { getSessionUser } from "@/lib/auth";
 import { getGmailOAuth2Client } from "@/lib/gmail/oauth";
 import { getActiveCloudProvider } from "@/lib/mailbox/provider";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 
 const STATE_COOKIE = "gmail_oauth_state";
 

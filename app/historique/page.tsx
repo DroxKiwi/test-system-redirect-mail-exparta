@@ -1,22 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { HistoriqueAutomationFilter } from "@/components/historique-automation-filter";
-import { HistoriqueCategoryFilter } from "@/components/historique-category-filter";
-import { DashboardShell } from "@/components/dashboard-shell";
-import { ListPageToolbar } from "@/components/list-page-toolbar";
-import { getSessionUser } from "@/lib/auth-user";
+import { HistoriqueAutomationFilter } from "@/components/historique/historique-automation-filter";
+import { HistoriqueCategoryFilter } from "@/components/historique/historique-category-filter";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { ListPageToolbar } from "@/components/layout/list-page-toolbar";
+import { getSessionUser } from "@/lib/auth";
 import {
   historiqueListHref,
   HISTORIQUE_PER_PAGE_OPTIONS,
   parseHistoriqueListQuery,
   type HistoriquePerPage,
-} from "@/lib/historique-list-query";
+} from "@/lib/historique/historique-list-query";
 import {
   mailHistoryPrismaWhere,
   presentMailFlowEvents,
   type MailHistoryCategory,
-} from "@/lib/mail-history-presenter";
-import { prisma } from "@/lib/prisma";
+} from "@/lib/historique/mail-history-presenter";
+import { prisma } from "@/lib/db/prisma";
 import { cn } from "@/lib/utils";
 
 function categoryBadge(category: MailHistoryCategory) {
