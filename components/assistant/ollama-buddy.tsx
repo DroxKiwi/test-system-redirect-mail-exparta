@@ -35,6 +35,12 @@ type ThreadMessage =
     };
 
 const ASSISTANT_THREAD_STORAGE_KEY = "exparta-assistant-thread-v1";
+const ASSISTANT_UI_STORAGE_KEY = "exparta-assistant-ui-v1";
+
+type AssistantUiPersisted = {
+  surfacesVisible: boolean;
+  chatOpen: boolean;
+};
 
 function messagesToJsonForStorage(msgs: ThreadMessage[]): string {
   const serializable = msgs
@@ -332,6 +338,7 @@ export function OllamaBuddy() {
   const [chatOpen, setChatOpen] = useState(false);
   /** false = tout est replié (sauf le bouton) ; true = fil + panneau possibles selon chatOpen. */
   const [surfacesVisible, setSurfacesVisible] = useState(true);
+  const [uiRestored, setUiRestored] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [threadHydrated, setThreadHydrated] = useState(false);
@@ -393,6 +400,34 @@ export function OllamaBuddy() {
       setSettingsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(ASSISTANT_UI_STORAGE_KEY);
+      if (raw) {
+        const j = JSON.parse(raw) as Partial<AssistantUiPersisted>;
+        if (typeof j.surfacesVisible === "boolean") {
+          setSurfacesVisible(j.surfacesVisible);
+        }
+        if (typeof j.chatOpen === "boolean") {
+          setChatOpen(j.chatOpen);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setUiRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!uiRestored) return;
+    try {
+      const payload: AssistantUiPersisted = { surfacesVisible, chatOpen };
+      sessionStorage.setItem(ASSISTANT_UI_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+  }, [uiRestored, surfacesVisible, chatOpen]);
 
   useEffect(() => {
     if (!chatOpen) return;
@@ -656,7 +691,6 @@ export function OllamaBuddy() {
         case "content_final": {
           setMessages((prev) => {
             const aid = streamAssistantIdRef.current;
-            streamAssistantIdRef.current = null;
             if (aid) {
               return prev.map((m) =>
                 m.id === aid && m.role === "assistant"
@@ -665,6 +699,7 @@ export function OllamaBuddy() {
               );
             }
             const nid = crypto.randomUUID();
+            streamAssistantIdRef.current = nid;
             return [
               ...prev,
               {
