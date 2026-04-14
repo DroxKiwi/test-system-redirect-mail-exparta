@@ -1,5 +1,5 @@
 import type { AgentChatMessage } from "@/lib/assistant/agent-messages";
-import { ollamaAssistantGenerationOptions } from "@/lib/assistant/ollama-assistant-generation";
+import { ollamaAssistantGenerationOptionsFromResolved } from "@/lib/assistant/ollama-assistant-generation";
 import type { ResolvedOllamaConfig } from "@/lib/ollama/ollama-config";
 
 export type OllamaStreamTurn = {
@@ -22,6 +22,7 @@ function parseNdjsonLines(
 
 /**
  * Un tour de chat Ollama en streaming (deltas). Agrège content / thinking / tool_calls du dernier message.
+ * `think` suit les réglages BDD (`assistantThinkingEnabled`).
  */
 export async function ollamaChatStreamOnce(
   cfg: ResolvedOllamaConfig,
@@ -38,28 +39,32 @@ export async function ollamaChatStreamOnce(
     headers.set("X-API-Key", cfg.apiKey);
   }
 
-  const genOpts = ollamaAssistantGenerationOptions();
+  const genOpts = ollamaAssistantGenerationOptionsFromResolved(cfg);
   const withOptions = (extra: Record<string, unknown>) =>
     genOpts ? { ...extra, options: genOpts } : extra;
 
-  const baseBody = withOptions({
-    model: cfg.model,
-    messages,
-    stream: true,
-    think: true,
-  });
+  const useThink = cfg.assistantThinkingEnabled === true;
+  const bodyWithThink = (): Record<string, unknown> => {
+    const core: Record<string, unknown> = {
+      model: cfg.model,
+      messages,
+      stream: true,
+    };
+    if (useThink) core.think = true;
+    return withOptions(core);
+  };
 
   let res = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify(baseBody),
+    body: JSON.stringify(bodyWithThink()),
     cache: "no-store",
     signal,
   });
 
   if (!res.ok && res.status === 400) {
     const errText = await res.text().catch(() => "");
-    if (/think/i.test(errText)) {
+    if (useThink && /think/i.test(errText)) {
       res = await fetch(url, {
         method: "POST",
         headers,

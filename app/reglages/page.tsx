@@ -44,7 +44,7 @@ export default async function ReglagesPage() {
           </div>
         </Suspense>
 
-        <OllamaSettingsForm />
+        {user.isAdmin ? <OllamaSettingsForm /> : null}
       </div>
     </DashboardShell>
   );

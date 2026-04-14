@@ -10,6 +10,12 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
   }
+  if (!user.isAdmin) {
+    return NextResponse.json(
+      { error: "Reserve aux administrateurs." },
+      { status: 403 },
+    );
+  }
 
   try {
     const models = await fetchOllamaModelNames();

@@ -12,6 +12,10 @@ function isValidHttpUrl(s: string): boolean {
   }
 }
 
+function clampNumber(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
 export async function GET() {
   const user = await getSessionUser();
   if (!user) {
@@ -23,17 +27,40 @@ export async function GET() {
   });
 
   if (!row) {
-    return NextResponse.json({
+    const empty = {
       baseUrl: "",
       hasApiKey: false,
       model: "",
-    });
+    };
+    return user.isAdmin
+      ? NextResponse.json({
+          ...empty,
+          assistantThinkingEnabled: false,
+          assistantOptionsEnabled: true,
+          assistantTemperature: 1,
+          assistantTopP: 0.95,
+          assistantTopK: 64,
+        })
+      : NextResponse.json(empty);
   }
 
-  return NextResponse.json({
+  const base = {
     baseUrl: row.baseUrl,
     hasApiKey: Boolean(row.apiKey?.trim()),
     model: row.model ?? "",
+  };
+
+  if (!user.isAdmin) {
+    return NextResponse.json(base);
+  }
+
+  return NextResponse.json({
+    ...base,
+    assistantThinkingEnabled: row.assistantThinkingEnabled,
+    assistantOptionsEnabled: row.assistantOptionsEnabled,
+    assistantTemperature: row.assistantTemperature,
+    assistantTopP: row.assistantTopP,
+    assistantTopK: row.assistantTopK,
   });
 }
 
@@ -41,6 +68,12 @@ export async function PUT(request: Request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
+  }
+  if (!user.isAdmin) {
+    return NextResponse.json(
+      { error: "Reserve aux administrateurs." },
+      { status: 403 },
+    );
   }
 
   let body: unknown;
@@ -88,12 +121,92 @@ export async function PUT(request: Request) {
     nextModel = b.model.trim();
   }
 
+  let assistantThinkingEnabled: boolean | undefined;
+  if ("assistantThinkingEnabled" in b) {
+    if (typeof b.assistantThinkingEnabled !== "boolean") {
+      return NextResponse.json(
+        { error: "assistantThinkingEnabled invalide." },
+        { status: 400 },
+      );
+    }
+    assistantThinkingEnabled = b.assistantThinkingEnabled;
+  }
+
+  let assistantOptionsEnabled: boolean | undefined;
+  if ("assistantOptionsEnabled" in b) {
+    if (typeof b.assistantOptionsEnabled !== "boolean") {
+      return NextResponse.json(
+        { error: "assistantOptionsEnabled invalide." },
+        { status: 400 },
+      );
+    }
+    assistantOptionsEnabled = b.assistantOptionsEnabled;
+  }
+
+  let assistantTemperature: number | undefined;
+  if ("assistantTemperature" in b) {
+    const v = b.assistantTemperature;
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+      return NextResponse.json(
+        { error: "assistantTemperature invalide." },
+        { status: 400 },
+      );
+    }
+    assistantTemperature = clampNumber(v, 0, 2);
+  }
+
+  let assistantTopP: number | undefined;
+  if ("assistantTopP" in b) {
+    const v = b.assistantTopP;
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+      return NextResponse.json(
+        { error: "assistantTopP invalide." },
+        { status: 400 },
+      );
+    }
+    assistantTopP = clampNumber(v, 0, 1);
+  }
+
+  let assistantTopK: number | undefined;
+  if ("assistantTopK" in b) {
+    const v = b.assistantTopK;
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+      return NextResponse.json(
+        { error: "assistantTopK invalide." },
+        { status: 400 },
+      );
+    }
+    const k = Math.trunc(v);
+    if (k < 1 || k > 100_000) {
+      return NextResponse.json(
+        { error: "assistantTopK doit etre entre 1 et 100000." },
+        { status: 400 },
+      );
+    }
+    assistantTopK = k;
+  }
+
   const updateData: Prisma.OllamaSettingsUpdateInput = { baseUrl };
   if (nextApiKey !== undefined) {
     updateData.apiKey = nextApiKey;
   }
   if (nextModel !== undefined) {
     updateData.model = nextModel;
+  }
+  if (assistantThinkingEnabled !== undefined) {
+    updateData.assistantThinkingEnabled = assistantThinkingEnabled;
+  }
+  if (assistantOptionsEnabled !== undefined) {
+    updateData.assistantOptionsEnabled = assistantOptionsEnabled;
+  }
+  if (assistantTemperature !== undefined) {
+    updateData.assistantTemperature = assistantTemperature;
+  }
+  if (assistantTopP !== undefined) {
+    updateData.assistantTopP = assistantTopP;
+  }
+  if (assistantTopK !== undefined) {
+    updateData.assistantTopK = assistantTopK;
   }
 
   await prisma.ollamaSettings.upsert({
@@ -103,6 +216,11 @@ export async function PUT(request: Request) {
       baseUrl,
       apiKey: nextApiKey === undefined ? null : nextApiKey,
       model: nextModel ?? "",
+      assistantThinkingEnabled: assistantThinkingEnabled ?? false,
+      assistantOptionsEnabled: assistantOptionsEnabled ?? true,
+      assistantTemperature: assistantTemperature ?? 1,
+      assistantTopP: assistantTopP ?? 0.95,
+      assistantTopK: assistantTopK ?? 64,
     },
     update: updateData,
   });

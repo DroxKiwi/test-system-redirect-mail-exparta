@@ -1,23 +1,28 @@
+import type { ResolvedOllamaConfig } from "@/lib/ollama/ollama-config";
+
 /**
- * Paramètres de génération pour l’assistant (requête Ollama `POST /api/chat`, clé `options`).
- * Tout ajuster ici : désactiver d’un coup avec `enabled: false`.
+ * Valeurs par défaut si la ligne BDD est absente (migrations) — alignées sur Prisma `OllamaSettings`.
  */
-export const OLLAMA_ASSISTANT_GENERATION = {
-  /** `false` : n’envoie pas `options` → Ollama utilise ses défauts pour le modèle. */
-  enabled: true,
+export const OLLAMA_ASSISTANT_GENERATION_DEFAULTS = {
+  thinkingEnabled: false,
+  optionsEnabled: true,
   temperature: 1.0,
   top_p: 0.95,
   top_k: 64,
-};
+} as const;
 
-/** Objet à fusionner dans le corps JSON sous `options`, ou `undefined` si désactivé. */
-export function ollamaAssistantGenerationOptions():
+/**
+ * Objet à fusionner dans le corps JSON Ollama sous `options`, ou `undefined` si désactivé en réglages.
+ */
+export function ollamaAssistantGenerationOptionsFromResolved(
+  cfg: ResolvedOllamaConfig,
+):
   | { temperature: number; top_p: number; top_k: number }
   | undefined {
-  if (!OLLAMA_ASSISTANT_GENERATION.enabled) return undefined;
+  if (!cfg.assistantOptionsEnabled) return undefined;
   return {
-    temperature: OLLAMA_ASSISTANT_GENERATION.temperature,
-    top_p: OLLAMA_ASSISTANT_GENERATION.top_p,
-    top_k: OLLAMA_ASSISTANT_GENERATION.top_k,
+    temperature: cfg.assistantTemperature,
+    top_p: cfg.assistantTopP,
+    top_k: cfg.assistantTopK,
   };
 }

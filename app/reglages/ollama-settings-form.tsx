@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 
 const NO_MODEL_VALUE = "__none__";
 
@@ -27,6 +29,11 @@ type OllamaSettingsResponse = {
   baseUrl: string;
   hasApiKey: boolean;
   model: string;
+  assistantThinkingEnabled?: boolean;
+  assistantOptionsEnabled?: boolean;
+  assistantTemperature?: number;
+  assistantTopP?: number;
+  assistantTopK?: number;
 };
 
 export function OllamaSettingsForm() {
@@ -35,6 +42,13 @@ export function OllamaSettingsForm() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [model, setModel] = useState("");
   const [models, setModels] = useState<string[]>([]);
+  const [assistantThinkingEnabled, setAssistantThinkingEnabled] =
+    useState(false);
+  const [assistantOptionsEnabled, setAssistantOptionsEnabled] =
+    useState(true);
+  const [assistantTemperature, setAssistantTemperature] = useState(1);
+  const [assistantTopP, setAssistantTopP] = useState(0.95);
+  const [assistantTopK, setAssistantTopK] = useState(64);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [listing, setListing] = useState(false);
@@ -55,6 +69,21 @@ export function OllamaSettingsForm() {
       setHasApiKey(Boolean(data.hasApiKey));
       setModel((data.model ?? "").trim());
       setApiKey("");
+      setAssistantThinkingEnabled(Boolean(data.assistantThinkingEnabled));
+      setAssistantOptionsEnabled(data.assistantOptionsEnabled !== false);
+      setAssistantTemperature(
+        typeof data.assistantTemperature === "number"
+          ? data.assistantTemperature
+          : 1,
+      );
+      setAssistantTopP(
+        typeof data.assistantTopP === "number" ? data.assistantTopP : 0.95,
+      );
+      setAssistantTopK(
+        typeof data.assistantTopK === "number"
+          ? Math.trunc(data.assistantTopK)
+          : 64,
+      );
     } catch {
       setError("Erreur reseau.");
     } finally {
@@ -96,6 +125,11 @@ export function OllamaSettingsForm() {
       const body: Record<string, unknown> = {
         baseUrl: baseUrl.trim(),
         model: model.trim(),
+        assistantThinkingEnabled,
+        assistantOptionsEnabled,
+        assistantTemperature,
+        assistantTopP,
+        assistantTopK,
       };
       if (apiKey.trim()) {
         body.apiKey = apiKey.trim();
@@ -132,6 +166,11 @@ export function OllamaSettingsForm() {
           baseUrl: baseUrl.trim(),
           apiKey: null,
           model: model.trim(),
+          assistantThinkingEnabled,
+          assistantOptionsEnabled,
+          assistantTemperature,
+          assistantTopP,
+          assistantTopK,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
@@ -156,9 +195,10 @@ export function OllamaSettingsForm() {
       <CardHeader>
         <CardTitle>Serveur Ollama distant</CardTitle>
         <CardDescription>
-          URL de base, en-tête <span className="font-mono">X-API-Key</span> si besoin, puis modèle
-          choisi parmi ceux exposés par <span className="font-mono">GET /api/tags</span>. Côté code
-          serveur : <span className="font-mono">getOllamaConfig()</span>.
+          Réservé aux administrateurs. URL de base, en-tête{" "}
+          <span className="font-mono">X-API-Key</span> si besoin, modèle via{" "}
+          <span className="font-mono">GET /api/tags</span>, puis paramètres de génération de
+          l&apos;assistant (corps <span className="font-mono">POST /api/chat</span>).
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -265,6 +305,98 @@ export function OllamaSettingsForm() {
                     Ollama ou actualise.
                   </p>
                 ) : null}
+              </div>
+
+              <Separator className="my-2" />
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Génération de l&apos;assistant
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Stocké en base avec la connexion Ollama. Le mode thinking peut faire boucler
+                    certains modèles.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                  <div className="min-w-0">
+                    <Label htmlFor="ollama-think" className="text-sm">
+                      Mode thinking (Ollama <span className="font-mono">think</span>)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Affiche la réflexion dans le fil et active <span className="font-mono">think: true</span>.
+                    </p>
+                  </div>
+                  <Switch
+                    id="ollama-think"
+                    checked={assistantThinkingEnabled}
+                    onCheckedChange={(v) => setAssistantThinkingEnabled(Boolean(v))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                  <div className="min-w-0">
+                    <Label htmlFor="ollama-options" className="text-sm">
+                      Envoyer temperature / top_p / top_k
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Si désactivé : pas de clé <span className="font-mono">options</span> — défauts Ollama du modèle.
+                    </p>
+                  </div>
+                  <Switch
+                    id="ollama-options"
+                    checked={assistantOptionsEnabled}
+                    onCheckedChange={(v) => setAssistantOptionsEnabled(Boolean(v))}
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ollama-temp">Température</Label>
+                    <Input
+                      id="ollama-temp"
+                      type="number"
+                      step="0.05"
+                      min={0}
+                      max={2}
+                      disabled={!assistantOptionsEnabled}
+                      value={assistantTemperature}
+                      onChange={(e) =>
+                        setAssistantTemperature(Number(e.target.value))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ollama-topp">Top P</Label>
+                    <Input
+                      id="ollama-topp"
+                      type="number"
+                      step="0.05"
+                      min={0}
+                      max={1}
+                      disabled={!assistantOptionsEnabled}
+                      value={assistantTopP}
+                      onChange={(e) => setAssistantTopP(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ollama-topk">Top K</Label>
+                    <Input
+                      id="ollama-topk"
+                      type="number"
+                      step={1}
+                      min={1}
+                      max={100000}
+                      disabled={!assistantOptionsEnabled}
+                      value={assistantTopK}
+                      onChange={(e) =>
+                        setAssistantTopK(Math.trunc(Number(e.target.value)) || 1)
+                      }
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2">

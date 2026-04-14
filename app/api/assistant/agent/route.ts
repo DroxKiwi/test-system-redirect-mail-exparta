@@ -9,7 +9,7 @@ const NDJSON_TYPE = "application/x-ndjson; charset=utf-8";
 
 /**
  * Assistant avec outils : réponse en NDJSON (une ligne JSON par événement).
- * Deltas : thinking_delta, content_delta ; outils : tool ; fin : done.
+ * Deltas : content_delta (éventuellement thinking_delta si le modèle en envoie) ; outils : tool ; fin : done.
  */
 export async function POST(request: Request) {
   const originErr = assistantRequestOriginError(request);

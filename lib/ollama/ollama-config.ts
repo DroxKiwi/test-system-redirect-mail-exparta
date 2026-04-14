@@ -5,6 +5,11 @@ export type ResolvedOllamaConfig = {
   apiKey: string | null;
   /** Modèle choisi dans les réglages (peut être vide). */
   model: string;
+  assistantThinkingEnabled: boolean;
+  assistantOptionsEnabled: boolean;
+  assistantTemperature: number;
+  assistantTopP: number;
+  assistantTopK: number;
 };
 
 function normalizeBaseUrl(raw: string): string {
@@ -30,5 +35,10 @@ export async function getOllamaConfig(): Promise<ResolvedOllamaConfig | null> {
     baseUrl,
     apiKey: key && key.length > 0 ? key : null,
     model: row.model?.trim() ?? "",
+    assistantThinkingEnabled: Boolean(row.assistantThinkingEnabled),
+    assistantOptionsEnabled: row.assistantOptionsEnabled !== false,
+    assistantTemperature: Number(row.assistantTemperature ?? 1),
+    assistantTopP: Number(row.assistantTopP ?? 0.95),
+    assistantTopK: Math.trunc(Number(row.assistantTopK ?? 64)) || 64,
   };
 }

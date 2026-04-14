@@ -324,6 +324,13 @@ model OllamaSettings {
   apiKey    String?
   /// Nom du modèle Ollama (ex. llama3.2), listé via GET /api/tags sur le serveur.
   model     String   @default("")
+  /// Requête Ollama `think: true` (modèles « thinking » ; peut provoquer des boucles).
+  assistantThinkingEnabled Boolean @default(false)
+  /// Si false : n’envoie pas la clé `options` (température, etc.) — défauts du modèle côté Ollama.
+  assistantOptionsEnabled  Boolean @default(true)
+  assistantTemperature     Float   @default(1.0)
+  assistantTopP            Float   @default(0.95)
+  assistantTopK            Int     @default(64)
   updatedAt DateTime @updatedAt
 }
 

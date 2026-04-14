@@ -29,7 +29,7 @@ const MAX_TOOL_RECOVERY_ATTEMPTS = 2;
 const TOOL_FOLLOWUP_HINT =
   "Instructions: reply to the user in **French** with at least one clear sentence. If a tool failed (ok:false in the JSON), explain the error or limitation in French. After a successful navigate_app, confirm in French that the page was opened. Never return an empty or whitespace-only reply. If the user’s question is about mail or counts and you still lack data, call sql_select on \"InboundMessage\" (and joins if needed) before concluding.";
 
-/** Thinking models may leave `content` empty unless we disable thinking on the wire. */
+/** Relance si le modèle renvoie un tour vide (sans thinking côté API). */
 const EMPTY_MODEL_RETRY_NUDGE =
   "[System] Your last reply was empty. Output EITHER only valid JSON: {\"tool_calls\":[{\"name\":\"…\",\"arguments\":{…}}]} with no other text, OR at least one helpful sentence in French. For mail/sender/count questions, call sql_select on \"InboundMessage\" first.";
 
@@ -284,7 +284,9 @@ async function streamOneAssistantTurn(
       messages,
       signal,
       ({ thinkingDelta, contentDelta }) => {
-        if (thinkingDelta) emit({ type: "thinking_delta", text: thinkingDelta });
+        if (cfg.assistantThinkingEnabled && thinkingDelta) {
+          emit({ type: "thinking_delta", text: thinkingDelta });
+        }
         if (contentDelta) {
           contentAgg += contentDelta;
           const vis = assistantStreamVisiblePrefix(contentAgg);
@@ -328,7 +330,7 @@ async function streamOneAssistantTurn(
 export type { AgentStreamEvent };
 
 /**
- * Boucle agent avec streaming Ollama (thinking + content) vers le client via `emit` (NDJSON).
+ * Boucle agent avec streaming Ollama vers le client via `emit` (NDJSON).
  */
 export async function runAssistantAgentLoopStreaming(
   cfg: ResolvedOllamaConfig,
