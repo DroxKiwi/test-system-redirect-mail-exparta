@@ -5,8 +5,8 @@
 export const FALLBACK_EMPTY_ASSISTANT_REPLY_FR = `Je n’ai pas reçu de réponse exploitable du modèle (réponse vide ou illisible).
 
 **Comment me guider :**
-- **Mails reçus** (dernier message, expéditeur, sujet, contenu) : précise par exemple « dernier mail », « expéditeur du dernier message », « mails contenant facture » — j’utilise **search_inbox** ou **db_read** sur l’entité \`inbound_message\` (liste triée par date, \`take: 1\` pour le plus récent).
-- **Tables / base de données** : « quelles tables ? » → **db_list_entities**, puis **db_read** avec la clé \`entity\`.
+- **Mails reçus** (nombre, dernier message, expéditeur, sujet, contenu) : j’utilise l’outil **sql_select** (requête SQL en lecture seule sur \`"InboundMessage"\`, etc.).
+- **Schéma SQL** : les noms de tables sont dans les instructions système de l’assistant (modèle Prisma / PostgreSQL).
 - **Tout ce que je peux faire** : « liste les outils » → **assistant_help**.
 
 Je n’invente pas les données : il faut toujours passer par un outil. Reformule ta question si tu veux un autre angle.`;
@@ -16,4 +16,4 @@ Je n’invente pas les données : il faut toujours passer par un outil. Reformul
  */
 export const ASSISTANT_THINKING_ONLY_BRIDGE_FR = `Le modèle n’a pas renvoyé de réponse rédigée dans le message principal (tu peux lire sa réflexion dans le bloc « Réflexion » juste au-dessus).
 
-**À faire :** réessaie, ou formule une consigne explicite du type « appelle **assistant_help** » ou « cherche dans la boîte avec **search_inbox** » (mots-clés : alerte, sujet, expéditeur). Les appels d’outils doivent apparaître en JSON dans le corps du message du modèle, pas seulement dans la réflexion interne.`;
+**À faire :** réessaie, ou formule une consigne explicite du type « appelle **assistant_help** » ou « interroge la base avec **sql_select** ». Les appels d’outils doivent apparaître en JSON dans le corps du message du modèle, pas seulement dans la réflexion interne.`;

@@ -1,9 +1,6 @@
 import type { AgentChatMessage } from "@/lib/assistant/agent-messages";
 import { buildAgentSystemPrompt } from "@/lib/assistant/agent-system-prompt";
-import {
-  toolTagDisplayMeta,
-  type ToolTagPalette,
-} from "@/lib/assistant/tool-display";
+import { toolTagDisplayMeta } from "@/lib/assistant/tool-display";
 import type { AssistantSessionContext } from "@/lib/assistant/session-types";
 import {
   executeAssistantTool,
@@ -13,19 +10,10 @@ import {
   ASSISTANT_THINKING_ONLY_BRIDGE_FR,
   FALLBACK_EMPTY_ASSISTANT_REPLY_FR,
 } from "@/lib/assistant/fallback-copy";
-import { ollamaAssistantGenerationOptions } from "@/lib/assistant/ollama-assistant-generation";
+import type { AgentStreamEvent } from "@/lib/assistant/agent-stream-events";
+import { ollamaChatStreamOnce } from "@/lib/assistant/ollama-stream";
+import { formatFriendlyToolCallsMessage } from "@/lib/assistant/tool-friendly-messages";
 import type { ResolvedOllamaConfig } from "@/lib/ollama/ollama-config";
-
-export type AgentUiSegment =
-  | {
-      type: "tool";
-      tool: string;
-      label: string;
-      ok: boolean;
-      palette: ToolTagPalette;
-    }
-  | { type: "thinking"; content: string }
-  | { type: "text"; content: string };
 
 export type { AgentChatMessage };
 
@@ -35,12 +23,15 @@ type ToolCallsPayload = {
 
 const MAX_ITERATIONS = 8;
 
+/** Après un premier lot d’outils en échec, nombre de tours « modèle + ré-exécution » supplémentaires avant abandon. */
+const MAX_TOOL_RECOVERY_ATTEMPTS = 2;
+
 const TOOL_FOLLOWUP_HINT =
-  "Instructions: reply to the user in **French** with at least one clear sentence. If a tool failed (ok:false in the JSON), explain the error or limitation in French. After a successful navigate_app, confirm in French that the page was opened. Never return an empty or whitespace-only reply. If the user’s question is about mail (sender, latest message, subject, body) and you still lack data, call search_inbox or db_read (entity inbound_message, orderByField receivedAt, orderByDir desc, take 1 or 5) before concluding.";
+  "Instructions: reply to the user in **French** with at least one clear sentence. If a tool failed (ok:false in the JSON), explain the error or limitation in French. After a successful navigate_app, confirm in French that the page was opened. Never return an empty or whitespace-only reply. If the user’s question is about mail or counts and you still lack data, call sql_select on \"InboundMessage\" (and joins if needed) before concluding.";
 
 /** Thinking models may leave `content` empty unless we disable thinking on the wire. */
 const EMPTY_MODEL_RETRY_NUDGE =
-  "[System] Your last reply was empty. Output EITHER only valid JSON: {\"tool_calls\":[{\"name\":\"…\",\"arguments\":{…}}]} with no other text, OR at least one helpful sentence in French. For mail/sender questions, call search_inbox or db_read on inbound_message first.";
+  "[System] Your last reply was empty. Output EITHER only valid JSON: {\"tool_calls\":[{\"name\":\"…\",\"arguments\":{…}}]} with no other text, OR at least one helpful sentence in French. For mail/sender/count questions, call sql_select on \"InboundMessage\" first.";
 
 function finalizeReply(reply: string, navigation: string | null): string {
   const t = reply.trim();
@@ -86,7 +77,7 @@ function truncateToolFollowupUserMessage(content: string): string {
   if (content.length <= MAX_TOOL_RESULTS_MESSAGE_CHARS) return content;
   return (
     content.slice(0, MAX_TOOL_RESULTS_MESSAGE_CHARS) +
-    "\n\n[… tool results truncated for context limit; call fewer tools or narrow db_read take …]"
+    "\n\n[… tool results truncated for context limit; use narrower sql_select or fewer columns …]"
   );
 }
 
@@ -133,6 +124,49 @@ function extractToolCalls(content: string): ToolCallsPayload | null {
   }
 
   return null;
+}
+
+/**
+ * Suffixe `{"tool_calls":...}` (complet ou en cours de stream) à ne pas afficher dans le fil.
+ */
+function stripTrailingToolCallsJsonBlock(s: string): string {
+  for (let i = s.length - 1; i >= 0; i--) {
+    if (s[i] !== "{") continue;
+    const tail = s.slice(i);
+    if (!/"tool_calls"\s*:/.test(tail)) continue;
+    const t = tail.trim();
+    if (extractToolCalls(t) !== null) {
+      return s.slice(0, i).trimEnd();
+    }
+    if (/^\s*\{\s*"tool_calls"\s*:\s*\[/.test(tail)) {
+      return s.slice(0, i).trimEnd();
+    }
+  }
+  return s;
+}
+
+/**
+ * Partie du contenu assistant à envoyer au client pendant le stream (masque le JSON d’outils).
+ */
+function assistantStreamVisiblePrefix(accumulated: string): string {
+  const trimmedAll = accumulated.trim();
+  if (trimmedAll.length > 0 && extractToolCalls(trimmedAll) !== null) {
+    return "";
+  }
+  const ts = accumulated.trimStart();
+  if (ts.startsWith("{")) {
+    if (/"tool_calls"\s*:/.test(accumulated)) {
+      return "";
+    }
+    if (!/"tool_calls"/.test(accumulated) && ts.length < 96) {
+      return "";
+    }
+  }
+  let s = stripTrailingToolCallsJsonBlock(accumulated);
+  if (extractToolCalls(s.trim()) !== null) {
+    return "";
+  }
+  return s;
 }
 
 function parseToolArgumentsField(raw: unknown): unknown {
@@ -182,8 +216,6 @@ function resolveToolCallsPayload(
   return extractToolCalls(content);
 }
 
-const MAX_THINKING_CHARS = 16_000;
-
 /** Trace affichée à part (police plus légère côté client) ; non renvoyée comme « réponse » principale. */
 function thinkingTraceText(raw: Record<string, unknown>): string {
   const t = raw.thinking;
@@ -191,11 +223,6 @@ function thinkingTraceText(raw: Record<string, unknown>): string {
   const r = raw.reasoning;
   if (typeof r === "string" && r.trim().length > 0) return r.trim();
   return "";
-}
-
-function clipThinkingForUi(text: string): string {
-  if (text.length <= MAX_THINKING_CHARS) return text;
-  return `${text.slice(0, MAX_THINKING_CHARS)}\n\n[… tronqué pour l’affichage …]`;
 }
 
 /** Texte principal : uniquement `content` (pas la trace thinking). */
@@ -233,100 +260,83 @@ function assistantTurnForHistory(
   });
 }
 
-type OllamaAssistantTurn = {
-  content: string;
-  raw: Record<string, unknown>;
-};
+function buildToolFailureRetryUserMessage(
+  summaries: string[],
+  attemptNumber: number,
+  maxAttempts: number,
+): string {
+  return `[System / relance outil ${attemptNumber}/${maxAttempts}] Au moins un outil a renvoyé ok:false. Lis les lignes JSON ci-dessous. Réponds soit (1) **uniquement** avec du JSON valide {"tool_calls":[...]} avec des arguments corrigés (ex. refaire sql_select pour obtenir le vrai id numérique de "InboundMessage", puis navigate_app avec cet id exact), soit (2) une brève explication en **français** si tu ne peux pas corriger. Ne répète pas exactement le même appel en échec sans changement.\n\n${summaries.join("\n")}`;
+}
 
-async function ollamaChatOnce(
+async function streamOneAssistantTurn(
   cfg: ResolvedOllamaConfig,
   messages: AgentChatMessage[],
   signal: AbortSignal | undefined,
-): Promise<OllamaAssistantTurn> {
-  const url = `${cfg.baseUrl}/api/chat`;
-  const headers = new Headers({
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  });
-  if (cfg.apiKey) {
-    headers.set("X-API-Key", cfg.apiKey);
-  }
-
-  const genOpts = ollamaAssistantGenerationOptions();
-  const withOptions = (extra: Record<string, unknown>) =>
-    genOpts ? { ...extra, options: genOpts } : extra;
-
-  const baseBody = withOptions({
-    model: cfg.model,
-    messages,
-    stream: false,
-    /** Modèles compatibles : `message.thinking` + `content` (thinking affiché à part dans l’UI). */
-    think: true,
-  });
-
-  let res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(baseBody),
-    cache: "no-store",
-    signal,
-  });
-
-  if (!res.ok && res.status === 400) {
-    const errText = await res.text().catch(() => "");
-    if (/think/i.test(errText)) {
-      res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(
-          withOptions({
-            model: cfg.model,
-            messages,
-            stream: false,
-          }),
-        ),
-        cache: "no-store",
-        signal,
-      });
-    } else {
-      throw new Error(
-        errText.trim().slice(0, 400) || `Ollama returned HTTP 400.`,
-      );
+  emit: (event: AgentStreamEvent) => void,
+): Promise<{ content: string; raw: Record<string, unknown> }> {
+  let lastContent = "";
+  let lastRaw: Record<string, unknown> = {};
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let contentAgg = "";
+    let lastVisibleLen = 0;
+    const turn = await ollamaChatStreamOnce(
+      cfg,
+      messages,
+      signal,
+      ({ thinkingDelta, contentDelta }) => {
+        if (thinkingDelta) emit({ type: "thinking_delta", text: thinkingDelta });
+        if (contentDelta) {
+          contentAgg += contentDelta;
+          const vis = assistantStreamVisiblePrefix(contentAgg);
+          if (vis.length < lastVisibleLen) {
+            lastVisibleLen = vis.length;
+          }
+          if (vis.length > lastVisibleLen) {
+            emit({
+              type: "content_delta",
+              text: vis.slice(lastVisibleLen),
+            });
+            lastVisibleLen = vis.length;
+          }
+        }
+      },
+    );
+    lastContent = turn.content;
+    lastRaw = turn.raw;
+    const payloadTry = resolveToolCallsPayload(turn.content, turn.raw);
+    const callsTry =
+      payloadTry?.tool_calls?.filter(
+        (c) => typeof c.name === "string" && c.name.trim().length > 0,
+      ) ?? [];
+    if (
+      turnHasUsableModelOutput(
+        turn.content,
+        turn.raw,
+        payloadTry,
+        callsTry,
+      )
+    ) {
+      return turn;
+    }
+    if (attempt === 0) {
+      messages.push({ role: "user", content: EMPTY_MODEL_RETRY_NUDGE });
     }
   }
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(
-      text.trim().slice(0, 400) || `Ollama returned HTTP ${res.status}.`,
-    );
-  }
-
-  const data = (await res.json()) as { message?: unknown };
-  const msg = data.message;
-  if (!msg || typeof msg !== "object") {
-    throw new Error("Ollama response had no message object.");
-  }
-  const raw = msg as Record<string, unknown>;
-  const contentField = raw.content;
-  const content = typeof contentField === "string" ? contentField : "";
-  return { content, raw };
+  return { content: lastContent, raw: lastRaw };
 }
 
-export type AgentRunResult = {
-  /** Ordre d’affichage : pastilles d’outils puis un ou plusieurs blocs texte. */
-  segments: AgentUiSegment[];
-  reply: string;
-  navigation: string | null;
-  pendingMutation: PendingMutationNotice | null;
-};
+export type { AgentStreamEvent };
 
-export async function runAssistantAgentLoop(
+/**
+ * Boucle agent avec streaming Ollama (thinking + content) vers le client via `emit` (NDJSON).
+ */
+export async function runAssistantAgentLoopStreaming(
   cfg: ResolvedOllamaConfig,
   conversation: AgentChatMessage[],
   signal: AbortSignal | undefined,
   session: AssistantSessionContext,
-): Promise<AgentRunResult> {
+  emit: (event: AgentStreamEvent) => void,
+): Promise<void> {
   const messages: AgentChatMessage[] = [
     { role: "system", content: buildAgentSystemPrompt(session.isAdmin) },
     ...conversation.filter((m) => m.role !== "system"),
@@ -334,119 +344,172 @@ export async function runAssistantAgentLoop(
 
   let lastNavigation: string | null = null;
   let lastPendingMutation: PendingMutationNotice | null = null;
-  const segments: AgentUiSegment[] = [];
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    let assistantContent = "";
-    let rawAssistant: Record<string, unknown> = {};
+    const turn = await streamOneAssistantTurn(cfg, messages, signal, emit);
+    let assistantContent = turn.content;
+    let rawAssistant: Record<string, unknown> = turn.raw;
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const turn = await ollamaChatOnce(cfg, messages, signal);
-      assistantContent = turn.content;
-      rawAssistant = turn.raw;
-      const payloadTry = resolveToolCallsPayload(assistantContent, rawAssistant);
-      const callsTry =
-        payloadTry?.tool_calls?.filter(
-          (c) => typeof c.name === "string" && c.name.trim().length > 0,
-        ) ?? [];
-      if (
-        turnHasUsableModelOutput(
-          assistantContent,
-          rawAssistant,
-          payloadTry,
-          callsTry,
-        )
-      ) {
-        break;
-      }
-      if (attempt === 0) {
-        messages.push({ role: "user", content: EMPTY_MODEL_RETRY_NUDGE });
-      }
-    }
+    let payload = resolveToolCallsPayload(assistantContent, rawAssistant);
 
-    const payload = resolveToolCallsPayload(assistantContent, rawAssistant);
-
-    const calls =
+    let calls =
       payload?.tool_calls?.filter((c) => typeof c.name === "string" && c.name.trim().length > 0) ??
       [];
 
     const thinkUi = thinkingTraceText(rawAssistant);
-    if (thinkUi.length > 0) {
-      segments.push({
-        type: "thinking",
-        content: clipThinkingForUi(thinkUi),
-      });
-    }
 
     if (!payload || calls.length === 0) {
+      const bodyRaw = replyBodyFromMessage(rawAssistant);
       const text = finalizeReplyWithThinkingAwareness(
-        replyBodyFromMessage(rawAssistant),
+        bodyRaw,
         thinkUi.length > 0,
         lastNavigation,
       );
-      segments.push({ type: "text", content: text });
-      return {
-        segments,
+      if (text !== bodyRaw.trim()) {
+        emit({ type: "content_final", text });
+      }
+      emit({
+        type: "done",
         reply: text,
         navigation: lastNavigation,
         pendingMutation: lastPendingMutation,
-      };
-    }
-
-    messages.push({
-      role: "assistant",
-      content: assistantTurnForHistory(assistantContent, payload),
-    });
-
-    const summaries: string[] = [];
-    for (const call of calls) {
-      const name = call.name.trim();
-      const meta = toolTagDisplayMeta(name);
-      const result = await executeAssistantTool(
-        name,
-        call.arguments ?? {},
-        session,
-      );
-      segments.push({
-        type: "tool",
-        tool: name,
-        label: meta.label,
-        ok: result.ok,
-        palette: meta.palette,
       });
-      if (result.navigation) {
-        lastNavigation = result.navigation;
-      }
-      if (result.ok && result.pendingMutation) {
-        lastPendingMutation = result.pendingMutation;
-      }
-      summaries.push(
-        jsonStringifyToolSummary(
-          name,
-          result.ok
-            ? { tool: name, ok: true, result: result.data }
-            : { tool: name, ok: false, error: result.error },
-        ),
-      );
+      return;
     }
 
-    messages.push({
-      role: "user",
-      content: truncateToolFollowupUserMessage(
-        `Tool results (JSON):\n${summaries.join("\n")}\n\n${TOOL_FOLLOWUP_HINT}`,
-      ),
-    });
+    let toolTurnContent = assistantContent;
+    let toolPayload: ToolCallsPayload = payload;
+    let toolCalls = calls;
+    let failedRecoveryUsed = 0;
+
+    while (true) {
+      emit({
+        type: "content_final",
+        text: formatFriendlyToolCallsMessage(toolCalls),
+      });
+
+      messages.push({
+        role: "assistant",
+        content: assistantTurnForHistory(toolTurnContent, toolPayload),
+      });
+
+      const summaries: string[] = [];
+      let anyFailure = false;
+      for (const call of toolCalls) {
+        const name = call.name.trim();
+        const meta = toolTagDisplayMeta(name);
+        const result = await executeAssistantTool(
+          name,
+          call.arguments ?? {},
+          session,
+        );
+        emit({
+          type: "tool",
+          tool: name,
+          label: meta.label,
+          ok: result.ok,
+          palette: meta.palette,
+        });
+        if (result.navigation) {
+          lastNavigation = result.navigation;
+        }
+        if (result.ok && result.pendingMutation) {
+          lastPendingMutation = result.pendingMutation;
+        }
+        if (!result.ok) anyFailure = true;
+        summaries.push(
+          jsonStringifyToolSummary(
+            name,
+            result.ok
+              ? { tool: name, ok: true, result: result.data }
+              : { tool: name, ok: false, error: result.error },
+          ),
+        );
+      }
+
+      if (!anyFailure) {
+        messages.push({
+          role: "user",
+          content: truncateToolFollowupUserMessage(
+            `Tool results (JSON):\n${summaries.join("\n")}\n\n${TOOL_FOLLOWUP_HINT}`,
+          ),
+        });
+        emit({ type: "stream_reset" });
+        break;
+      }
+
+      if (failedRecoveryUsed >= MAX_TOOL_RECOVERY_ATTEMPTS) {
+        messages.push({
+          role: "user",
+          content: truncateToolFollowupUserMessage(
+            `Tool results (JSON). Les relances automatiques après échec sont épuisées (${MAX_TOOL_RECOVERY_ATTEMPTS} tentative(s) de correction). Explique en **français** ce qui bloque, cite les erreurs ci-dessous, et indique quoi faire (ex. nouvelle requête sql_select pour le bon id, puis navigate_app).\n${summaries.join("\n")}\n\n${TOOL_FOLLOWUP_HINT}`,
+          ),
+        });
+        emit({ type: "stream_reset" });
+        break;
+      }
+
+      failedRecoveryUsed += 1;
+      messages.push({
+        role: "user",
+        content: buildToolFailureRetryUserMessage(
+          summaries,
+          failedRecoveryUsed,
+          MAX_TOOL_RECOVERY_ATTEMPTS,
+        ),
+      });
+
+      const recoveryTurn = await streamOneAssistantTurn(
+        cfg,
+        messages,
+        signal,
+        emit,
+      );
+      toolTurnContent = recoveryTurn.content;
+      rawAssistant = recoveryTurn.raw;
+
+      const payloadRec = resolveToolCallsPayload(
+        toolTurnContent,
+        rawAssistant,
+      );
+      const callsRec =
+        payloadRec?.tool_calls?.filter(
+          (c) => typeof c.name === "string" && c.name.trim().length > 0,
+        ) ?? [];
+
+      if (!payloadRec || callsRec.length === 0) {
+        const bodyRaw = replyBodyFromMessage(rawAssistant);
+        const text = finalizeReplyWithThinkingAwareness(
+          bodyRaw,
+          thinkingTraceText(rawAssistant).length > 0,
+          lastNavigation,
+        );
+        if (text !== bodyRaw.trim()) {
+          emit({ type: "content_final", text });
+        }
+        emit({
+          type: "done",
+          reply: text,
+          navigation: lastNavigation,
+          pendingMutation: lastPendingMutation,
+        });
+        return;
+      }
+
+      toolPayload = payloadRec;
+      toolCalls = callsRec;
+    }
   }
 
   const text = finalizeReply(
-    "Étape limite d’outils atteinte. Reformule en une question plus simple, ou demande « quels outils » / « dernier mail » pour que j’utilise search_inbox ou db_read.",
+    "Étape limite d’outils atteinte. Reformule en une question plus simple, ou demande « quels outils » / une requête **sql_select** sur « InboundMessage ».",
     lastNavigation,
   );
-  segments.push({ type: "text", content: text });
-  return {
-    segments,
+  emit({ type: "content_final", text });
+  emit({
+    type: "done",
     reply: text,
     navigation: lastNavigation,
     pendingMutation: lastPendingMutation,
-  };
+  });
 }

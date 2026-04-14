@@ -23,36 +23,11 @@ export const ASSISTANT_TOOL_REGISTRY: ToolDefinition[] = [
     risk: "read",
   },
   {
-    name: "db_list_entities",
+    name: "sql_select",
     summary:
-      "Lists all Prisma tables / entities exposed for read access (key, description, adminOnly).",
+      "Run a single read-only PostgreSQL SELECT (or WITH … SELECT). Primary way to read mail rows, counts, and related tables.",
     parameters:
-      "No arguments. Call before db_read to discover valid entity keys.",
-    adminOnly: false,
-    risk: "read",
-  },
-  {
-    name: "db_read",
-    summary:
-      "Generic read on one entity (list or single row by id): access to everything listed in the catalog.",
-    parameters:
-      "entity (string, e.g. inbound_message), operation: list | get, optional: id (for get), take (1–75), skip, orderByField, orderByDir (asc|desc), where: array of { field, op: eq|contains, value } on fields allowed for that entity.",
-    adminOnly: false,
-    risk: "read",
-  },
-  {
-    name: "search_inbox",
-    summary:
-      "Search inbox messages (same rules as the reception / inbox UI).",
-    parameters:
-      "At least one of: textContains, fromContains, subjectContains (strings). optional: limit (1–25).",
-    adminOnly: false,
-    risk: "read",
-  },
-  {
-    name: "get_inbox_message",
-    summary: "Read one inbox message details (body text, subject, sender).",
-    parameters: "id (integer message id).",
+      'query (string): one SQL statement; use double-quoted Prisma table names (e.g. "InboundMessage"). See system prompt for schema. Rows are capped server-side.',
     adminOnly: false,
     risk: "read",
   },
@@ -61,15 +36,8 @@ export const ASSISTANT_TOOL_REGISTRY: ToolDefinition[] = [
     summary:
       "Ask the client to open a page (message list or message detail).",
     parameters:
-      'path: "/boite" or "/boite/ID" where ID is the exact inbound_message.id from a prior tool (search_inbox / get_inbox_message / db_read). Do not invent IDs.',
+      'path: "/boite" or "/boite/ID" where ID is the exact "InboundMessage"."id" from sql_select. Do not invent IDs.',
     adminOnly: false,
-    risk: "read",
-  },
-  {
-    name: "list_app_users",
-    summary: "List application user accounts (summary).",
-    parameters: "No arguments. Admin only.",
-    adminOnly: true,
     risk: "read",
   },
   {

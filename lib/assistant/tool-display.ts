@@ -17,12 +17,8 @@ export function toolTagDisplayMeta(toolName: string): {
   const name = toolName.trim();
   const known: Record<string, { label: string; palette: ToolTagPalette }> = {
     assistant_help: { label: "Aide des outils", palette: "violet" },
-    db_list_entities: { label: "Catalogue BDD", palette: "violet" },
-    db_read: { label: "Lecture BDD", palette: "sky" },
-    search_inbox: { label: "Recherche boîte mail", palette: "sky" },
-    get_inbox_message: { label: "Lecture message", palette: "cyan" },
+    sql_select: { label: "Recherche en base de donnée", palette: "sky" },
     navigate_app: { label: "Navigation", palette: "emerald" },
-    list_app_users: { label: "Liste utilisateurs", palette: "amber" },
     request_archive_inbox_message: {
       label: "Demande d’archivage",
       palette: "orange",

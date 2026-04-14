@@ -1,30 +1,42 @@
-import { NextResponse } from "next/server";
 import { normalizeAgentChatMessages } from "@/lib/assistant/agent-messages";
-import { runAssistantAgentLoop } from "@/lib/assistant/agent-loop";
+import { runAssistantAgentLoopStreaming } from "@/lib/assistant/agent-loop";
+import type { AgentStreamEvent } from "@/lib/assistant/agent-stream-events";
 import { assistantRequestOriginError } from "@/lib/assistant/request-guard";
 import { getSessionUser } from "@/lib/auth";
 import { getOllamaConfig } from "@/lib/ollama/ollama-config";
 
+const NDJSON_TYPE = "application/x-ndjson; charset=utf-8";
+
 /**
- * Assistant avec outils (BDD métier via handlers serveur). Réponse JSON, pas de stream.
- * Les outils ne sont pas exposés sur une route séparée : exécution interne à cette requête.
+ * Assistant avec outils : réponse en NDJSON (une ligne JSON par événement).
+ * Deltas : thinking_delta, content_delta ; outils : tool ; fin : done.
  */
 export async function POST(request: Request) {
   const originErr = assistantRequestOriginError(request);
   if (originErr) {
-    return NextResponse.json({ error: originErr }, { status: 403 });
+    return new Response(
+      JSON.stringify({ type: "error", message: originErr } satisfies AgentStreamEvent) + "\n",
+      { status: 403, headers: { "Content-Type": NDJSON_TYPE } },
+    );
   }
 
   const user = await getSessionUser();
   if (!user) {
-    return NextResponse.json({ error: "Non authentifie." }, { status: 401 });
+    return new Response(
+      JSON.stringify({ type: "error", message: "Non authentifie." } satisfies AgentStreamEvent) +
+        "\n",
+      { status: 401, headers: { "Content-Type": NDJSON_TYPE } },
+    );
   }
 
   const cfg = await getOllamaConfig();
   if (!cfg?.model) {
-    return NextResponse.json(
-      { error: "Ollama non configure ou modele absent." },
-      { status: 400 },
+    return new Response(
+      JSON.stringify({
+        type: "error",
+        message: "Ollama non configure ou modele absent.",
+      } satisfies AgentStreamEvent) + "\n",
+      { status: 400, headers: { "Content-Type": NDJSON_TYPE } },
     );
   }
 
@@ -32,42 +44,70 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "JSON invalide." }, { status: 400 });
+    return new Response(
+      JSON.stringify({ type: "error", message: "JSON invalide." } satisfies AgentStreamEvent) +
+        "\n",
+      { status: 400, headers: { "Content-Type": NDJSON_TYPE } },
+    );
   }
 
   if (typeof body !== "object" || body === null || !("messages" in body)) {
-    return NextResponse.json({ error: "messages[] requis." }, { status: 400 });
+    return new Response(
+      JSON.stringify({ type: "error", message: "messages[] requis." } satisfies AgentStreamEvent) +
+        "\n",
+      { status: 400, headers: { "Content-Type": NDJSON_TYPE } },
+    );
   }
 
   const messages = normalizeAgentChatMessages(
     (body as { messages: unknown }).messages,
   );
   if (!messages) {
-    return NextResponse.json(
-      { error: "messages[] invalide ou trop volumineux." },
-      { status: 400 },
+    return new Response(
+      JSON.stringify({
+        type: "error",
+        message: "messages[] invalide ou trop volumineux.",
+      } satisfies AgentStreamEvent) + "\n",
+      { status: 400, headers: { "Content-Type": NDJSON_TYPE } },
     );
   }
 
   const ac = request.signal;
+  const encoder = new TextEncoder();
 
-  try {
-    const { segments, reply, navigation, pendingMutation } =
-      await runAssistantAgentLoop(cfg, messages, ac, {
-        userId: user.id,
-        isAdmin: user.isAdmin,
-      });
-    return NextResponse.json({
-      segments,
-      reply,
-      navigation,
-      pendingMutation,
-    });
-  } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") {
-      return NextResponse.json({ error: "Annule." }, { status: 499 });
-    }
-    const msg = e instanceof Error ? e.message : "Erreur inconnue.";
-    return NextResponse.json({ error: msg }, { status: 502 });
-  }
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (ev: AgentStreamEvent) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+      };
+      try {
+        await runAssistantAgentLoopStreaming(cfg, messages, ac, {
+          userId: user.id,
+          isAdmin: user.isAdmin,
+        }, send);
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
+          send({ type: "error", message: "Annule." });
+        } else {
+          const msg = e instanceof Error ? e.message : "Erreur inconnue.";
+          send({ type: "error", message: msg });
+        }
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": NDJSON_TYPE,
+      "Cache-Control": "no-store",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

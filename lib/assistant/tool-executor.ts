@@ -3,13 +3,7 @@ import { inboundMessageExistsForBoiteDetail } from "@/lib/boite/boite-messages";
 import {
   requestArchiveInboxMessage,
 } from "@/lib/assistant/archive-inbox-request";
-import {
-  dbListEntitiesForSession,
-  executeDbRead,
-} from "@/lib/assistant/db-read/execute";
-import { getInboxMessageForAgent } from "@/lib/assistant/get-inbox-message";
-import { listAppUsersForAgent } from "@/lib/assistant/list-users-for-agent";
-import { searchInboxMessagesForAgent } from "@/lib/assistant/search-inbox-messages";
+import { executeAssistantSqlSelect } from "@/lib/assistant/sql-read/execute";
 import type { AssistantSessionContext } from "@/lib/assistant/session-types";
 import {
   toolAllowedForUser,
@@ -37,17 +31,6 @@ export type ToolExecutionResult =
 function asRecord(v: unknown): Record<string, unknown> | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   return v as Record<string, unknown>;
-}
-
-function asOptionalString(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined;
-  const t = v.trim();
-  return t.length > 0 ? t : undefined;
-}
-
-function asOptionalLimit(v: unknown): number | undefined {
-  if (typeof v !== "number" || !Number.isFinite(v)) return undefined;
-  return Math.trunc(v);
 }
 
 function asMessageId(v: unknown): number | null {
@@ -85,35 +68,29 @@ export async function executeAssistantTool(
   }
 
   switch (trimmed) {
-    case "db_list_entities": {
-      return {
-        ok: true,
-        data: dbListEntitiesForSession(ctx.isAdmin),
-        navigation: null,
-      };
-    }
-    case "db_read": {
+    case "sql_select": {
       const o = asRecord(args) ?? {};
-      const entity = typeof o.entity === "string" ? o.entity : "";
-      const operation =
-        typeof o.operation === "string" ? o.operation : "list";
-      const r = await executeDbRead(
-        {
-          entity,
-          operation,
-          id: o.id,
-          take: o.take,
-          skip: o.skip,
-          orderByField: o.orderByField,
-          orderByDir: o.orderByDir,
-          where: o.where,
-        },
-        ctx,
-      );
+      const query = typeof o.query === "string" ? o.query : "";
+      if (!query.trim()) {
+        return {
+          ok: false,
+          error: "sql_select requires query (non-empty SQL string).",
+          navigation: null,
+        };
+      }
+      const r = await executeAssistantSqlSelect(query, ctx.isAdmin);
       if (!r.ok) {
         return { ok: false, error: r.error, navigation: null };
       }
-      return { ok: true, data: r.data, navigation: null };
+      return {
+        ok: true,
+        data: {
+          rows: r.rows,
+          rowCount: r.rowCount,
+          truncated: r.truncated,
+        },
+        navigation: null,
+      };
     }
     case "assistant_help": {
       const tools = toolsCatalogForHelp(ctx.isAdmin).map((t) => ({
@@ -131,16 +108,6 @@ export async function executeAssistantTool(
         },
         navigation: null,
       };
-    }
-    case "search_inbox": {
-      const o = asRecord(args) ?? {};
-      const r = await searchInboxMessagesForAgent({
-        textContains: asOptionalString(o.textContains),
-        fromContains: asOptionalString(o.fromContains),
-        subjectContains: asOptionalString(o.subjectContains),
-        limit: asOptionalLimit(o.limit),
-      });
-      return { ok: true, data: r, navigation: null };
     }
     case "navigate_app": {
       const o = asRecord(args) ?? {};
@@ -167,7 +134,7 @@ export async function executeAssistantTool(
         if (!exists) {
           return {
             ok: false,
-            error: `No openable message at /boite/${messageId} (unknown id or inactive address). Use only the numeric id from search_inbox, get_inbox_message, or db_read on inbound_message — never invent an id (e.g. 1 for "first").`,
+            error: `No openable message at /boite/${messageId} (unknown id or inactive address). Use only "InboundMessage"."id" from sql_select — never invent an id (e.g. 1 for "first").`,
             navigation: null,
           };
         }
@@ -177,27 +144,6 @@ export async function executeAssistantTool(
         data: { opened: path },
         navigation: path,
       };
-    }
-    case "get_inbox_message": {
-      const o = asRecord(args) ?? {};
-      const id = asMessageId(o.id);
-      if (id === null) {
-        return {
-          ok: false,
-          error:
-            "get_inbox_message requires id (positive integer, message identifier).",
-          navigation: null,
-        };
-      }
-      const r = await getInboxMessageForAgent(id);
-      if (!r.ok) {
-        return { ok: false, error: r.error, navigation: null };
-      }
-      return { ok: true, data: r.message, navigation: null };
-    }
-    case "list_app_users": {
-      const users = await listAppUsersForAgent();
-      return { ok: true, data: { users, count: users.length }, navigation: null };
     }
     case "request_archive_inbox_message": {
       const o = asRecord(args) ?? {};

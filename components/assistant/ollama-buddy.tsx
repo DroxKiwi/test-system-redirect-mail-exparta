@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { AgentStreamEvent } from "@/lib/assistant/agent-stream-events";
 import { FALLBACK_EMPTY_ASSISTANT_REPLY_FR } from "@/lib/assistant/fallback-copy";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +24,7 @@ type ThreadMessage =
       isError?: boolean;
       streaming?: boolean;
     }
-  | { id: string; role: "thinking"; content: string }
+  | { id: string; role: "thinking"; content: string; streaming?: boolean }
   | {
       id: string;
       role: "tool";
@@ -37,7 +38,13 @@ const ASSISTANT_THREAD_STORAGE_KEY = "exparta-assistant-thread-v1";
 
 function messagesToJsonForStorage(msgs: ThreadMessage[]): string {
   const serializable = msgs
-    .filter((m) => !(m.role === "assistant" && m.streaming))
+    .filter(
+      (m) =>
+        !(
+          (m.role === "assistant" || m.role === "thinking") &&
+          m.streaming
+        ),
+    )
     .map((m) => {
       if (m.role === "assistant") {
         return {
@@ -46,6 +53,9 @@ function messagesToJsonForStorage(msgs: ThreadMessage[]): string {
           content: m.content,
           ...(m.isError ? { isError: true as const } : {}),
         };
+      }
+      if (m.role === "thinking") {
+        return { id: m.id, role: m.role, content: m.content };
       }
       return m;
     });
@@ -172,7 +182,13 @@ function ThreadToolTagBubble({
   );
 }
 
-function ThreadThinkingBubble({ content }: { content: string }) {
+function ThreadThinkingBubble({
+  content,
+  streaming,
+}: {
+  content: string;
+  streaming?: boolean;
+}) {
   return (
     <div className="ollama-buddy-bubble-animate-assistant flex w-full justify-start">
       <div
@@ -183,9 +199,22 @@ function ThreadThinkingBubble({ content }: { content: string }) {
         <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70">
           Réflexion
         </p>
-        <p className="mt-1 text-[11px] font-light leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
-          {content}
-        </p>
+        {streaming && !content ? (
+          <p className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
+            …
+          </p>
+        ) : (
+          <p className="mt-1 text-[11px] font-light leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
+            {content}
+            {streaming ? (
+              <span
+                className="ml-px inline-block h-2.5 w-0.5 translate-y-0.5 animate-pulse bg-muted-foreground/50 align-middle"
+                aria-hidden
+              />
+            ) : null}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -213,7 +242,7 @@ function ThreadAssistantBubble({
         {streaming && !content ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
-            Réflexion…
+            Réponse…
           </p>
         ) : (
           <p
@@ -323,6 +352,8 @@ export function OllamaBuddy() {
   const abortRef = useRef<AbortController | null>(null);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const buddyRootRef = useRef<HTMLDivElement>(null);
+  const streamThinkingIdRef = useRef<string | null>(null);
+  const streamAssistantIdRef = useRef<string | null>(null);
 
   const collapseAssistant = useCallback(() => {
     setSurfacesVisible(false);
@@ -457,6 +488,8 @@ export function OllamaBuddy() {
   }
 
   const resetThread = useCallback(() => {
+    streamThinkingIdRef.current = null;
+    streamAssistantIdRef.current = null;
     abortRef.current?.abort();
     abortRef.current = null;
     setMessages([]);
@@ -505,23 +538,216 @@ export function OllamaBuddy() {
       { role: "user", content: text },
     ];
 
+    const assistPlaceholderId = crypto.randomUUID();
+    streamThinkingIdRef.current = null;
+    streamAssistantIdRef.current = assistPlaceholderId;
+
     setMessages((prev) => [
       ...prev,
       { id: userId, role: "user", content: text },
-    ]);
-    setMessage("");
-    setIsSending(true);
-
-    const assistantBubbleId = crypto.randomUUID();
-    setMessages((prev) => [
-      ...prev,
       {
-        id: assistantBubbleId,
+        id: assistPlaceholderId,
         role: "assistant",
         content: "",
         streaming: true,
       },
     ]);
+    setMessage("");
+    setIsSending(true);
+
+    const applyStreamEvent = (ev: AgentStreamEvent) => {
+      switch (ev.type) {
+        case "thinking_delta": {
+          if (!ev.text) return;
+          setMessages((prev) => {
+            let tid = streamThinkingIdRef.current;
+            if (!tid) {
+              tid = crypto.randomUUID();
+              streamThinkingIdRef.current = tid;
+              const aid = streamAssistantIdRef.current;
+              const insertIdx =
+                aid !== null ? prev.findIndex((m) => m.id === aid) : -1;
+              const thinkingMsg = {
+                id: tid,
+                role: "thinking" as const,
+                content: ev.text,
+                streaming: true,
+              };
+              if (insertIdx >= 0) {
+                return [
+                  ...prev.slice(0, insertIdx),
+                  thinkingMsg,
+                  ...prev.slice(insertIdx),
+                ];
+              }
+              return [...prev, thinkingMsg];
+            }
+            return prev.map((m) =>
+              m.id === tid && m.role === "thinking"
+                ? { ...m, content: m.content + ev.text }
+                : m,
+            );
+          });
+          return;
+        }
+        case "content_delta": {
+          if (!ev.text) return;
+          setMessages((prev) => {
+            const aid = streamAssistantIdRef.current;
+            if (aid) {
+              const exists = prev.some(
+                (m) => m.id === aid && m.role === "assistant",
+              );
+              if (exists) {
+                return prev.map((m) =>
+                  m.id === aid && m.role === "assistant"
+                    ? { ...m, content: m.content + ev.text }
+                    : m,
+                );
+              }
+            }
+            const newId = crypto.randomUUID();
+            streamAssistantIdRef.current = newId;
+            return [
+              ...prev,
+              {
+                id: newId,
+                role: "assistant" as const,
+                content: ev.text,
+                streaming: true,
+              },
+            ];
+          });
+          return;
+        }
+        case "stream_reset": {
+          streamThinkingIdRef.current = null;
+          const nextAid = crypto.randomUUID();
+          streamAssistantIdRef.current = nextAid;
+          setMessages((prev) => [
+            ...prev.map((m) =>
+              (m.role === "assistant" || m.role === "thinking") && m.streaming
+                ? { ...m, streaming: false }
+                : m,
+            ),
+            {
+              id: nextAid,
+              role: "assistant" as const,
+              content: "",
+              streaming: true,
+            },
+          ]);
+          return;
+        }
+        case "tool": {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              role: "tool" as const,
+              tool: ev.tool,
+              label: ev.label,
+              ok: ev.ok,
+              palette: ev.palette,
+            },
+          ]);
+          return;
+        }
+        case "content_final": {
+          setMessages((prev) => {
+            const aid = streamAssistantIdRef.current;
+            streamAssistantIdRef.current = null;
+            if (aid) {
+              return prev.map((m) =>
+                m.id === aid && m.role === "assistant"
+                  ? { ...m, content: ev.text, streaming: false }
+                  : m,
+              );
+            }
+            const nid = crypto.randomUUID();
+            return [
+              ...prev,
+              {
+                id: nid,
+                role: "assistant" as const,
+                content: ev.text,
+                streaming: false,
+              },
+            ];
+          });
+          return;
+        }
+        case "done": {
+          const replyText =
+            typeof ev.reply === "string" ? ev.reply.trim() : "";
+          streamThinkingIdRef.current = null;
+          streamAssistantIdRef.current = null;
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (
+                (m.role === "assistant" || m.role === "thinking") &&
+                m.streaming
+              ) {
+                if (
+                  m.role === "assistant" &&
+                  !m.content.trim() &&
+                  replyText.length > 0
+                ) {
+                  return {
+                    ...m,
+                    content: ev.reply,
+                    streaming: false,
+                  };
+                }
+                return { ...m, streaming: false };
+              }
+              return m;
+            }),
+          );
+          const nav =
+            typeof ev.navigation === "string" && ev.navigation.length > 0
+              ? ev.navigation
+              : null;
+          if (nav) {
+            router.push(nav);
+          }
+          const pm = ev.pendingMutation;
+          if (
+            pm &&
+            typeof pm.token === "string" &&
+            pm.token.length > 0 &&
+            typeof pm.summary === "string"
+          ) {
+            setPendingMutation({ token: pm.token, summary: pm.summary });
+          } else {
+            setPendingMutation(null);
+          }
+          return;
+        }
+        case "error": {
+          streamThinkingIdRef.current = null;
+          streamAssistantIdRef.current = null;
+          setMessages((prev) => [
+            ...prev.filter(
+              (m) =>
+                !(
+                  (m.role === "assistant" || m.role === "thinking") &&
+                  m.streaming
+                ),
+            ),
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: ev.message,
+              isError: true,
+            },
+          ]);
+          return;
+        }
+        default:
+          return;
+      }
+    };
 
     try {
       const res = await fetch("/api/assistant/agent", {
@@ -531,126 +757,73 @@ export function OllamaBuddy() {
         signal: ac.signal,
       });
 
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        reply?: string;
-        segments?: unknown;
-        navigation?: string | null;
-        pendingMutation?: {
-          token?: string;
-          summary?: string;
-          kind?: string;
-        } | null;
-      };
-
       if (!res.ok) {
-        const err = data.error ?? `Erreur ${res.status}`;
-        setMessages((prev) => [
-          ...prev.filter((m) => m.id !== assistantBubbleId),
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: err,
-            isError: true,
-          },
-        ]);
-        setIsSending(false);
+        const errText = await res.text();
+        let errMsg = `Erreur ${res.status}`;
+        const firstLine = errText.trim().split("\n")[0];
+        if (firstLine) {
+          try {
+            const j = JSON.parse(firstLine) as AgentStreamEvent;
+            if (j.type === "error") errMsg = j.message;
+          } catch {
+            /* ignore */
+          }
+        }
+        applyStreamEvent({ type: "error", message: errMsg });
         return;
       }
 
-      const navigation =
-        typeof data.navigation === "string" && data.navigation.length > 0
-          ? data.navigation
-          : null;
-
-      const parsedSegments = parseAssistantSegments(data);
-
-      let lastTextIndex = -1;
-      for (let i = parsedSegments.length - 1; i >= 0; i--) {
-        if (parsedSegments[i].type === "text") {
-          lastTextIndex = i;
-          break;
-        }
-      }
-
-      const tailMessages: ThreadMessage[] = [];
-      parsedSegments.forEach((seg, index) => {
-        if (seg.type === "tool") {
-          tailMessages.push({
-            id: crypto.randomUUID(),
-            role: "tool",
-            tool: seg.tool,
-            label: seg.label,
-            ok: seg.ok,
-            palette: seg.palette,
-          });
-          return;
-        }
-        if (seg.type === "thinking") {
-          tailMessages.push({
-            id: crypto.randomUUID(),
-            role: "thinking",
-            content: seg.content.trim(),
-          });
-          return;
-        }
-        let body = seg.content.trim();
-        if (index === lastTextIndex && !body) {
-          body = navigation
-            ? `J’ouvre la page ${navigation} dans l’application.`
-            : FALLBACK_EMPTY_ASSISTANT_REPLY_FR;
-        }
-        tailMessages.push({
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: body,
+      const reader = res.body?.getReader();
+      if (!reader) {
+        applyStreamEvent({
+          type: "error",
+          message: "Réponse vide du serveur.",
         });
-      });
-
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== assistantBubbleId),
-        ...tailMessages,
-      ]);
-
-      if (navigation) {
-        router.push(navigation);
+        return;
       }
 
-      const pm = data.pendingMutation;
-      if (
-        pm &&
-        typeof pm.token === "string" &&
-        pm.token.length > 0 &&
-        typeof pm.summary === "string"
-      ) {
-        setPendingMutation({ token: pm.token, summary: pm.summary });
-      } else {
-        setPendingMutation(null);
+      const dec = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t) continue;
+          try {
+            applyStreamEvent(JSON.parse(t) as AgentStreamEvent);
+          } catch {
+            /* ligne NDJSON invalide */
+          }
+        }
+      }
+      if (buf.trim()) {
+        try {
+          applyStreamEvent(JSON.parse(buf.trim()) as AgentStreamEvent);
+        } catch {
+          /* ignore */
+        }
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
+        streamThinkingIdRef.current = null;
+        streamAssistantIdRef.current = null;
         setMessages((prev) =>
           prev.filter(
             (m) =>
               !(
-                m.id === assistantBubbleId &&
-                m.role === "assistant" &&
-                !m.content.trim()
+                (m.role === "assistant" || m.role === "thinking") &&
+                m.streaming
               ),
           ),
         );
         return;
       }
       const msg = e instanceof Error ? e.message : "Erreur inconnue.";
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== assistantBubbleId),
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: msg,
-          isError: true,
-        },
-      ]);
+      applyStreamEvent({ type: "error", message: msg });
     } finally {
       setIsSending(false);
     }
@@ -733,7 +906,11 @@ export function OllamaBuddy() {
                   }
                   if (m.role === "thinking") {
                     return (
-                      <ThreadThinkingBubble key={m.id} content={m.content} />
+                      <ThreadThinkingBubble
+                        key={m.id}
+                        content={m.content}
+                        streaming={m.streaming}
+                      />
                     );
                   }
                   return (
